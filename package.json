@@ -1,0 +1,32 @@
+{
+  "name": "cli_invader",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChrysArex/cli_invader.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ChrysArex/cli_invader/issues"
+  },
+  "homepage": "https://github.com/ChrysArex/cli_invader#readme",
+  "description": "",
+  "dependencies": {
+    "ansi-escape-sequences": "^6.2.2",
+    "ansi-escapes": "^7.0.0",
+    "commander": "^12.1.0",
+    "express": "^4.21.0",
+    "express-ws": "^5.0.2",
+    "figlet": "^1.7.0",
+    "inquirer": "^11.0.1",
+    "mongo": "^0.1.0",
+    "redis": "^4.7.0",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
+  }
+}
