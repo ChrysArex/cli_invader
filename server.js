@@ -20,7 +20,7 @@ function sleep(ms) {
 async function shoot(action, id, data) {
 	let fireY = '';
 	data = data + '      ';
-	while(fireY.length !== 10) {
+	while(fireY.length !== 12) {
 		fireY = fireY + '\n';
 		broadcast(action, id, `${data},${fireY}`);
 		await sleep(100);
