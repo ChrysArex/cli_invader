@@ -1,6 +1,7 @@
 import { WebSocket } from 'ws';
 import { eraseLines } from "ansi-escapes";
 import { v4 as uuidv4 } from 'uuid';
+import figlet from 'figlet';
 
 
 function sleep(ms) {
@@ -12,19 +13,20 @@ async function shoot(data) {
         data = data + '      ';
         while(laserY.length !== 0) {
                 laserY = laserY.slice(0, laserY.length - 1);
-                let adversary = adversaryPosX ? adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + ' ***** ****\n' + adversaryPosX + '     \\/' : '';
+                let adversary = adversaryPosX ? adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + `***** ****${adversarylp}\n` + adversaryPosX + '     \\/' : '';
         	let laser = laserY ? laserY + data + '|' : '';
 		let space = '\n';
         	for(let i = 0; i < (10 - laserY.length); i = i + 1) {
                 	space = space + '\n';
         	}
 		if (laserY.length === 0 && data.length >= adversaryPosX.length && data.length <= adversaryPosX.length + 10) {
+			adversarylp = adversarylp - 1;
 			laser = laserY;
-			adversary = adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + ' * * * * * * * * *\n' + adversaryPosX + '     /\\';
+			adversary = adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + `* * * * * * * * *${adversarylp}\n` + adversaryPosX + '     /\\';
 			console.clear();
 			console.log(adversary + laser + space + vessel);
 			await sleep(200);
-			adversary = adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + ' ***** ****\n' + adversaryPosX + '     \\/';
+			adversary = adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + `***** ****${adversarylp}\n` + adversaryPosX + '     \\/';
 		}
         	console.clear();
         	console.log(adversary + laser + space + vessel);
@@ -38,9 +40,14 @@ process.stdin.resume()
 
 const id = uuidv4();
 
-let vessel = ' ____/\\____\n' + '/|||| ||||\\';
+//adversary and self life point
+let lp = 100;
+let adversarylp = 100;
 
-//opponent and self horizotal position
+//starship of the player
+let vessel = `${lp}____/\\____\n` + '  /|||| ||||\\';
+
+//adversary and self horizontal position
 let adversaryPosX = '';
 let posX = '';
 
@@ -63,7 +70,7 @@ client.on('open', () => {
 			client.send(`fire_${id}_${posX}`);
 			await shoot(posX);
 		}
-		vessel = posX + ' ____/\\____\n' + posX + '/|||| ||||\\';
+		vessel = posX + `${lp}____/\\____\n` + posX + '  /|||| ||||\\';
 		console.log(eraseLines(3) + vessel);
 		client.send(`move_${id}_${posX}`);
 	}) 
@@ -79,22 +86,43 @@ client.on('message', (message) => {
 	if (action === 'fire') {
 		shootPosX = data.split(',')[0];
 		laserY = data.split(',')[1] ? data.split(',')[1] : '';
+		//adversaryPosX = shootPosX;
 	} else if (action === 'move' || action === 'login'){
 		adversaryPosX = data;
+	} else if (action === 'destroyed') {
+		adversaryPosX = '';
+	} else if (action === 'win') {
+		client.close(1000, 'Winner');
+		return;
 	}
-	const adversary = adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + ' ***** ****\n' + adversaryPosX + '     \\/';
+	const adversary = adversaryPosX ? adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + `***** ****${adversarylp}\n` + adversaryPosX + '     \\/': '';
 	let space = '\n'
 	let laser = laserY ? laserY + shootPosX + '|' : '';
 	for(let i = 0; i < (12 - laserY.length); i = i + 1) {
 		space = space + '\n';
 	}
 	if (laser && laserY.length === 12 && shootPosX.length >= posX.length && shootPosX.length <= posX.length + 10) {
+		lp = lp - 1;
 		laser = laserY;
-		vessel = posX + ' ----\\/----\n' + posX + '/|||| ||||\\';
-		dammage = 10000;
+		vessel = posX + `${lp}----\\/----\n` + posX + '  /|||| ||||\\';
 	}
 	console.clear();
 	console.log(adversary + laser + space + vessel);
-	setTimeout(() => {}, dammage);
-	vessel = posX + ' ____/\\____\n' + posX + '/|||| ||||\\';
+	if (lp === 0) {
+		client.send(`destroyed_${id}_${posX}`);
+		client.close(1000, 'Game Over');
+	}
+	vessel = posX + `${lp}____/\\____\n` + posX + '  /|||| ||||\\';
+})
+
+client.on('close', (close) => {
+	const winOrLose = figlet.textSync('Game Over', {
+                        font: "Graffiti",
+                        horizontalLayout: "default",
+                        verticalLayout: "default",
+                        width: 80,
+                        whitespaceBreak: true,
+                })
+	console.log(winOrLose);
+	console.log('Press esc to go back to menu');
 })

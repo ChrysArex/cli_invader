@@ -28,12 +28,12 @@ async function shoot(action, id, data) {
 }
 
 const app = express();
-const players = []
+let players = []
 expressWs(app);
 
 app.ws('/start', (ws, req) => {
 	ws.on('message', async (message) => {
-		const action = message.toString().split('_')[0];
+		let action = message.toString().split('_')[0];
 		const id = message.toString().split('_')[1];
                 const data = message.toString().split('_')[2];
 		if (action === 'login') {
@@ -42,11 +42,16 @@ app.ws('/start', (ws, req) => {
 			console.log(`player ${player.id} connected!!!`);
 		} else if (action === 'fire') {
 			await shoot(action, id, data);
+		} else if (action === 'destroyed') {
+			players = players.filter(val => val.id !== id);
+			if (players.length === 1) {
+				action = 'win';
+			}
 		}
 		broadcast(action, id, data);
 	})
 })
 
-app.listen(3000, () => {
+app.listen(3000, () =>{
     console.log('Server is listening on port 3000');
 });
