@@ -15,9 +15,9 @@ CLI INVADER is a modern take on the classic Space Invaders game, but with a twis
 1-Clone the repository:
 
   ```
-  git clone https://github.com/your-username/cli-invader.git
+  git clone https://github.com/your-username/cli_invader.git
 
-  cd cli-invader
+  cd cli_invader
   ```
 
 2-Install the required dependencies:
