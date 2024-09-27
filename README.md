@@ -24,7 +24,7 @@ cd cli-invader
 
 3-Start the server:
 
-  npm install
+  node server
 
 4-Start the Game (in another terminal):
 
