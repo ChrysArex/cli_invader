@@ -17,8 +17,10 @@
   "homepage": "https://github.com/ChrysArex/cli_invader#readme",
   "description": "",
   "dependencies": {
+    "@inquirer/select": "^3.0.1",
     "ansi-escape-sequences": "^6.2.2",
     "ansi-escapes": "^7.0.0",
+    "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "express": "^4.21.0",
     "express-ws": "^5.0.2",

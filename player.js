@@ -13,21 +13,22 @@ async function shoot(data) {
         data = data + '      ';
         while(laserY.length !== 0) {
                 laserY = laserY.slice(0, laserY.length - 1);
-                let adversary = adversaryPosX ? adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + `***** ****${adversarylp}\n` + adversaryPosX + '     \\/' : '';
+                let adversary = adversaryPosX !== '' ? adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + `***** ****${adversarylp}\n` + adversaryPosX + '     \\/' : '';
         	let laser = laserY ? laserY + data + '|' : '';
 		let space = '\n';
-        	for(let i = 0; i < (10 - laserY.length); i = i + 1) {
+        	for(let i = 0; i < (12 - laserY.length); i = i + 1) {
                 	space = space + '\n';
         	}
 		if (laserY.length === 0 && data.length >= adversaryPosX.length && data.length <= adversaryPosX.length + 10) {
 			adversarylp = adversarylp - 1;
 			laser = laserY;
-			adversary = adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + `* * * * * * * * *${adversarylp}\n` + adversaryPosX + '     /\\';
+			adversary = adversaryPosX !== '' ? adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + `* * * * * * * * *${adversarylp}\n` + adversaryPosX + '     /\\' : '';
 			console.clear();
 			console.log(adversary + laser + space + vessel);
 			await sleep(200);
 			adversary = adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + `***** ****${adversarylp}\n` + adversaryPosX + '     \\/';
 		}
+		if (adversarylp === 0) { client.close(); }
         	console.clear();
         	console.log(adversary + laser + space + vessel);
                 await sleep(100);
@@ -36,8 +37,9 @@ async function shoot(data) {
 
 
 process.stdin.setRawMode(true);
-process.stdin.resume()
+process.stdin.resume();
 
+//player's ID
 const id = uuidv4();
 
 //adversary and self life point
@@ -70,15 +72,18 @@ client.on('open', () => {
 			client.send(`fire_${id}_${posX}`);
 			await shoot(posX);
 		}
+		let space = '\n\n\n\n\n\n\n\n\n\n\n\n\n';
 		vessel = posX + `${lp}____/\\____\n` + posX + '  /|||| ||||\\';
-		console.log(eraseLines(3) + vessel);
+		let adversary = adversaryPosX !== '' ? adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + `***** ****${adversarylp}\n` + adversaryPosX + '     \\/' : '';
+		console.clear();
+		console.log(adversary + space + vessel);
 		client.send(`move_${id}_${posX}`);
 	}) 
 });
 
 client.on('message', (message) => {
 	const action = message.toString().split('_')[0];
-        const id = message.toString().split('_')[1];
+        const senderId = message.toString().split('_')[1];
         const data = message.toString().split('_')[2];
 	let laserY = '';
 	let shootPosX = '';
@@ -91,12 +96,13 @@ client.on('message', (message) => {
 		adversaryPosX = data;
 	} else if (action === 'destroyed') {
 		adversaryPosX = '';
+		console.log(`${action} received`)
 	} else if (action === 'win') {
+		console.log(`${action} received`)
 		client.close(1000, 'Winner');
-		return;
 	}
 	const adversary = adversaryPosX ? adversaryPosX + '\\\\dest_234//\n' + adversaryPosX + `***** ****${adversarylp}\n` + adversaryPosX + '     \\/': '';
-	let space = '\n'
+	let space = '\n';
 	let laser = laserY ? laserY + shootPosX + '|' : '';
 	for(let i = 0; i < (12 - laserY.length); i = i + 1) {
 		space = space + '\n';
@@ -110,19 +116,19 @@ client.on('message', (message) => {
 	console.log(adversary + laser + space + vessel);
 	if (lp === 0) {
 		client.send(`destroyed_${id}_${posX}`);
-		client.close(1000, 'Game Over');
 	}
 	vessel = posX + `${lp}____/\\____\n` + posX + '  /|||| ||||\\';
 })
 
 client.on('close', (close) => {
-	const winOrLose = figlet.textSync('Game Over', {
+	const winOrLose = lp > 0 ? 'Winner' : 'Game Over';
+	const endGame = figlet.textSync(winOrLose, {
                         font: "Graffiti",
                         horizontalLayout: "default",
                         verticalLayout: "default",
                         width: 80,
                         whitespaceBreak: true,
                 })
-	console.log(winOrLose);
-	console.log('Press esc to go back to menu');
+	console.log(endGame);
+	process.exit();
 })

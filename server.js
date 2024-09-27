@@ -5,9 +5,13 @@ import { v4 as uuidv4 } from 'uuid';
 
 
 function broadcast(action, id, data) {
+	console.log(`Player ${id} ${action}`);
 	players.forEach((player) => {
 		if (player.id !== id) {
-			console.log(`Player ${player.id} ${action}`);
+			if (action === 'win') {
+				console.log(`sending data to ${player.id}`);
+				player.ws.close(1000, 'Winner');
+			}
 			player.ws.send(`${action}_${id}_${data}`);
 		}
 	})
@@ -44,14 +48,17 @@ app.ws('/start', (ws, req) => {
 			await shoot(action, id, data);
 		} else if (action === 'destroyed') {
 			players = players.filter(val => val.id !== id);
+			console.log(`player ${id} DESTROYED!!!`);
+			ws.close(1000, 'Game Over');
 			if (players.length === 1) {
 				action = 'win';
+				console.log(players)
 			}
 		}
 		broadcast(action, id, data);
 	})
 })
 
-app.listen(3000, () =>{
+app.listen(3000, () => {
     console.log('Server is listening on port 3000');
 });
