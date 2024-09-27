@@ -14,21 +14,23 @@ CLI INVADER is a modern take on the classic Space Invaders game, but with a twis
 
 1-Clone the repository:
 
-git clone https://github.com/your-username/cli-invader.git
+  ```
+  git clone https://github.com/your-username/cli-invader.git
 
-cd cli-invader
+  cd cli-invader
+  ```
 
 2-Install the required dependencies:
 
-  npm install
+    npm install
 
 3-Start the server:
 
-  node server
+    node server
 
 4-Start the Game (in another terminal):
 
-  node index.js
+    node index.js
 
 🛠️ Technologies
 
