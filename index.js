@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { program } from "commander";
-import { fork } from "node:child_process";
 import chalk from "chalk";
 import { select, Separator } from "@inquirer/prompts";
 import figlet from "figlet";
+import { play } from "./options.js";
 
 const banner = figlet.textSync("CLI INVADER", {
   font: "Graffiti",
@@ -13,14 +13,6 @@ const banner = figlet.textSync("CLI INVADER", {
   width: 80,
   whitespaceBreak: true,
 });
-
-async function play() {
-  const forked = await fork("player.js");
-  forked.on('close', (msg) => {
-	  console.clear();
-	  console.log('Press UP or Down arrow key to go back to menu');
-  });
-}
 
 program.version("1.0.0").description("My Node CLI");
 
