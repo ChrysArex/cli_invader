@@ -2,7 +2,7 @@ import { WebSocket } from "ws";
 import { eraseLines } from "ansi-escapes";
 import { v4 as uuidv4 } from "uuid";
 import figlet from "figlet";
-import { getStarship, sleep, shoot, displayScene } from "./utils.js";
+import { sleep, shoot, displayScene } from "../utils.js";
 
 class player {
   constructor() {
@@ -25,13 +25,13 @@ class player {
     this.posY = "";
 
     //starship of the player
-    this.vessel = getStarship(this.posX, this.posY, this.lp, "vessel");
+    //this.vessel = getStarship(this.posX, this.posY, this.lp, "vessel");
 
     //the actual connection
     this.client = new WebSocket("ws://localhost:3000/start");
 
     this.client.on("open", this.launchStarshipNavigation);
-    this.client.on("message", this.updateBattleSate);
+    this.client.on("message", this.updateBattleState);
     this.client.on("close", this.endBattle);
   }
 
@@ -66,7 +66,7 @@ class player {
     });
   }
 
-  updateBattleSate(message) {
+  updateBattleState(message) {
     const action = message.toString().split("_")[0];
     const senderId = message.toString().split("_")[1];
     const data = message.toString().split("_")[2];
