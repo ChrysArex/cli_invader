@@ -2,7 +2,13 @@ import { WebSocket } from "ws";
 import { eraseLines } from "ansi-escapes";
 import { v4 as uuidv4 } from "uuid";
 import figlet from "figlet";
-import { sleep, shoot, displayScene } from "../utils.js";
+import {
+  sleep,
+  shoot,
+  displayScene,
+  screenXLimit,
+  screenYLimit,
+} from "../utils.js";
 
 class player {
   constructor() {
@@ -17,12 +23,12 @@ class player {
     this.adversarylp = 100;
 
     //adversary and self horizontal position
-    this.adversaryPosX = "";
-    this.posX = "";
+    this.adversaryPosX = 0;
+    this.posX = 0;
 
     //adversary and self vertical position
-    this.adversaryPosY = "";
-    this.posY = "";
+    this.adversaryPosY = 0;
+    this.posY = 0;
 
     //starship of the player
     //this.vessel = getStarship(this.posX, this.posY, this.lp, "vessel");
@@ -30,43 +36,55 @@ class player {
     //the actual connection
     this.client = new WebSocket("ws://localhost:3000/start");
 
-    this.client.on("open", this.launchStarshipNavigation);
+    this.client.on("error", console.error);
+    this.client.on("open", this.enableStarshipNavigation);
     this.client.on("message", this.updateBattleState);
     this.client.on("close", this.endBattle);
   }
 
-  launchStarshipNavigation() {
-    this.client.send(`login_${id}_${posX}`);
-    //todo: make a request to get all object states
-    console.log(this.vessel); // Display frames showing the state of the whole game
-    process.stdin.on("data", async (data) => {
-      if (data.toString() === "\u001b") {
+  enableStarshipNavigation() {
+    //Set a listener for user input
+    //Send the new information to the server for global state and frame synchronisation
+    //Update the locale state and frame
+    const actions = {
+      //escape
+      "\x1b": () => {
         process.exit();
-      } else if (data.toString() === "\x1b[C") {
-        if (posX.length <= 60) {
-          posX = posX + " ";
-        }
-      } else if (data.toString() === "\x1b[D") {
-        if (posX.length >= 1) {
-          posX = posX.slice(0, posX.length - 1);
-        } else if (data.toString() === " ") {
-          this.client.send(`fire_${id}_${posX}`);
-          await shoot(posX);
-        }
-      }
-      let space = "\n\n\n\n\n\n\n\n\n\n\n\n\n";
-      this.vessel = getStarship(this.posX, this.posY, this.lp, "vessel");
-      let adversary =
-        adversaryPosX !== ""
-          ? getStarship(this.posX, this.posY, this.lp, "vessel")
-          : "";
-      console.clear();
-      console.log(adversary + space + this.vessel);
-      this.client.send(`move_${id}_${posX}`);
-    });
+      },
+
+      //right move
+      "\x1b[C": () => {
+        if (this.posX < screenXLimit - 10) this.posX += 1;
+      },
+
+      //left move
+      "\x1b[D": () => {
+        if (this.posX >= 1) this.posX -= 1;
+      },
+
+      //up move
+      "\x1b[A": () => {
+        if (this.posY > 0) this.posY -= 1;
+      },
+
+      //down move
+      "\x1b[B": () => {
+        if (this.posY < screenYLimit) this.posY += 1;
+      },
+
+      //shoot
+      " ": async () => {
+        this.client.send(`fire_${id}_${posX}`);
+        await shoot(posX);
+      },
+    };
+    process.stdin.on("data", async (data) => actions[data]);
+    //this.client.send(data);
   }
 
   updateBattleState(message) {
+    //listen to incoming information from the server
+    //Display new frame for synchronisation
     const action = message.toString().split("_")[0];
     const senderId = message.toString().split("_")[1];
     const data = message.toString().split("_")[2];

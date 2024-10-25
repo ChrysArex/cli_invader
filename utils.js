@@ -1,6 +1,5 @@
-export function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const screenXLimit = 60;
+const screenYLimit = 60;
 
 const objectsSize = {
   vessel: [10, 2],
@@ -8,10 +7,14 @@ const objectsSize = {
   shoot: [0, 1],
 };
 
+export function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function getSubFrameRepr(horizontalElmts, posYReference) {
   let subframe = "\n".repeat(horizontalElmts[0].posY - posYReference);
   //here we define a fix length for subframe
-  let line = " ".repeat(60);
+  let line = " ".repeat(screenXLimit);
   let posXReference = 0;
   let offset = 0;
   horizontalElmts.forEach((elmt, index, array) => {
@@ -35,14 +38,14 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
     //we add the representation of the element at his X coordinate and
     //copie the left and rigth part from the previous representation of the line
     line =
-      line.slice(0, elmt.posX) + repr + line.slice(elmt.posX + repr.length, 60);
+      line.slice(0, elmt.posX) +
+      repr +
+      line.slice(elmt.posX + repr.length, screenXLimit);
     posXReference = elmt.posX;
   });
   subframe += line;
   return subframe;
 }
-
-//console.log(getSubFrameRepr("", "", 0, "vessel"));
 
 // This is the state manager responsible to render a consistent representation of the game state across all players (Frame)
 export function displayScene(sceneElements) {
