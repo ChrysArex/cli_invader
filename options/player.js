@@ -8,30 +8,29 @@ import {
   displayScene,
   screenXLimit,
   screenYLimit,
+  objectsSize,
 } from "../utils.js";
 
 class player {
-  constructor() {
+  constructor(type = "vessel") {
     process.stdin.setRawMode(true);
     process.stdin.resume();
 
     //player's ID
     this.id = uuidv4();
 
-    //adversary and self life point
+    //life point
     this.lp = 100;
-    this.adversarylp = 100;
 
-    //adversary and self horizontal position
-    this.adversaryPosX = 0;
+    //X and Y coordinates
     this.posX = 0;
-
-    //adversary and self vertical position
-    this.adversaryPosY = 0;
     this.posY = 0;
 
-    //starship of the player
-    //this.vessel = getStarship(this.posX, this.posY, this.lp, "vessel");
+    //list of object present in the game
+    this.sceneElements = [];
+
+    //the type of the player
+    this.type = type;
 
     //the actual connection
     this.client = new WebSocket("ws://localhost:3000/start");
@@ -42,10 +41,14 @@ class player {
     this.client.on("close", this.endBattle);
   }
 
+  /*
+   *This function define the motion mechanism for a player
+   *It basically set an listenner for keyboards inputs wich are then used to update the game state
+   */
   enableStarshipNavigation() {
-    //Set a listener for user input
-    //Send the new information to the server for global state and frame synchronisation
-    //Update the locale state and frame
+    const y = [];
+    for (let i = 0; i < objectsSize[this.type][1]; i++) y.push(this.posY + i);
+
     const actions = {
       //escape
       "\x1b": () => {
@@ -54,17 +57,58 @@ class player {
 
       //right move
       "\x1b[C": () => {
-        if (this.posX < screenXLimit - 10) this.posX += 1;
+        const obstacle = this.sceneElements.find((obj) => {
+          if (
+            obj.posY === y[y.length - 1] &&
+            obj.posX === this.posX + Math.trunc(objectsSize[this.type][0] / 2)
+          )
+            return true;
+          if (
+            y.slice(0, y.length - 1).includes(obj.posY) &&
+            obj.posX === this.posX + objectsSize[this.type][0]
+          )
+            return true;
+          return false;
+        });
+
+        if (!obstacle && this.posX < screenXLimit - objectsSize[this.type][0])
+          this.posX += 1;
       },
 
       //left move
       "\x1b[D": () => {
-        if (this.posX >= 1) this.posX -= 1;
+        const obstacle = this.sceneElements.find((obj) => {
+          if (
+            obj.posY === y[y.length - 1] &&
+            obj.posX === this.posX + Math.trunc(objectsSize[this.type][0] / 2)
+          )
+            return true;
+          if (
+            y.slice(0, y.length - 1).includes(obj.posY) &&
+            obj.posX + objectsSize[obj.type][0] === this.posX
+          )
+            return true;
+          return false;
+        });
+        if (!obstacle && this.posX >= 1) this.posX -= 1;
       },
 
       //up move
       "\x1b[A": () => {
-        if (this.posY > 0) this.posY -= 1;
+        const obstacle = this.sceneElements.find((obj) => {
+          if (
+            obj.posY === y[y.length - 1] &&
+            obj.posX === this.posX + Math.trunc(objectsSize[this.type][0] / 2)
+          )
+            return true;
+          if (
+            y.slice(0, y.length - 1).includes(obj.posY) &&
+            obj.posX + objectsSize[obj.type][0] === this.posX
+          )
+            return true;
+          return false;
+        });
+        if (!obstacle && this.posY > 0) this.posY -= 1;
       },
 
       //down move
@@ -78,13 +122,16 @@ class player {
         await shoot(posX);
       },
     };
-    process.stdin.on("data", async (data) => actions[data]);
-    //this.client.send(data);
+    process.stdin.on("data", (data) => {
+      actions[data];
+      displayScene(this.sceneElements);
+    });
+    this.client.send({ posX: this.posX, posY: this.posY });
   }
 
+  //listen to incoming message from the server/client and update the battle view
+  //Display new frame for synchronisation
   updateBattleState(message) {
-    //listen to incoming information from the server
-    //Display new frame for synchronisation
     const action = message.toString().split("_")[0];
     const senderId = message.toString().split("_")[1];
     const data = message.toString().split("_")[2];

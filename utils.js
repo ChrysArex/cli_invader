@@ -103,6 +103,8 @@ displayScene([
   { posX: 9, posY: 7, type: "vessel", lp: 100 },
 ]);
 
+Array.prototype.f;
+
 export async function shoot(data) {
   let laserY = "\n\n\n\n\n\n\n\n\n\n\n";
   data = data + "      ";
