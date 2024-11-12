@@ -26,24 +26,40 @@ class player {
     this.posX = 0;
     this.posY = 0;
 
-    //list of object present in the game
-    this.sceneElements = [];
-
     //the type of the player
     this.type = type;
 
-    //the actual connection
-    this.client = new WebSocket("ws://localhost:3000/start");
+    //list of object present in the game
+    this.sceneElements = [
+      {
+        posX: this.posX,
+        posY: this.posY,
+        type: this.type,
+        lp: this.lp,
+      },
+    ];
 
-    this.client.on("error", console.error);
-    this.client.on("open", this.enableStarshipNavigation);
-    this.client.on("message", this.updateBattleState);
-    this.client.on("close", this.endBattle);
+    //the actual connection
+    //this.client = new WebSocket("ws://localhost:3000/start");
+
+    // this.client.on("error", console.error);
+    // this.client.on("open", this.enableStarshipNavigation);
+    // this.client.on("message", this.updateBattleState);
+    // this.client.on("close", this.endBattle);
+
+    // The JSON representation of this object
+    this.jsonRepr = {
+      posX: this.posX,
+      posY: this.posY,
+      type: this.type,
+      lp: this.lp,
+    };
+    this.enableStarshipNavigation();
   }
 
   /*
-   *This function define the motion mechanism for a player
-   *It basically set an listenner for keyboards inputs wich are then used to update the game state
+   * This function define the motion mechanism for a player
+   * It basically set an listenner for keyboards inputs wich are then used to update the game state
    */
   enableStarshipNavigation() {
     const y = [];
@@ -97,13 +113,9 @@ class player {
       "\x1b[A": () => {
         const obstacle = this.sceneElements.find((obj) => {
           if (
-            obj.posY === y[y.length - 1] &&
-            obj.posX === this.posX + Math.trunc(objectsSize[this.type][0] / 2)
-          )
-            return true;
-          if (
-            y.slice(0, y.length - 1).includes(obj.posY) &&
-            obj.posX + objectsSize[obj.type][0] === this.posX
+            this.posY - obj.posY + objectsSize[obj.type][1] === 1 &&
+            this.posX < obj.posX + objectsSize[obj.type][0] &&
+            obj.posX < this.posX + objectsSize[this.type][0]
           )
             return true;
           return false;
@@ -113,89 +125,111 @@ class player {
 
       //down move
       "\x1b[B": () => {
-        if (this.posY < screenYLimit) this.posY += 1;
+        const obstacle = this.sceneElements.find((obj) => {
+          if (
+            this.posY - obj.posY + objectsSize[obj.type][1] === -1 &&
+            this.posX < obj.posX + objectsSize[obj.type][0] &&
+            obj.posX < this.posX + objectsSize[this.type][0]
+          )
+            return true;
+          return false;
+        });
+
+        if (!obstacle && this.posY + objectsSize[this.type][1] < screenYLimit)
+          this.posY += 1;
       },
 
       //shoot
       " ": async () => {
-        this.client.send(`fire_${id}_${posX}`);
+        //
+        //this.client.send(`fire_${id}_${posX}`);
         await shoot(posX);
       },
     };
     process.stdin.on("data", (data) => {
-      actions[data];
-      displayScene(this.sceneElements);
+      console.log(this.sceneElements);
+      if (data.toString() in actions) {
+        actions[data.toString()]();
+        //this.sceneElements.pop();
+        // this.sceneElements.push({
+        //   posX: this.posX,
+        //   posY: this.posY,
+        //   type: this.type,
+        //   lp: this.lp,
+        // });
+        displayScene(this.sceneElements);
+      }
     });
-    this.client.send({ posX: this.posX, posY: this.posY });
+    //this.client.send({ posX: this.posX, posY: this.posY });
   }
 
   //listen to incoming message from the server/client and update the battle view
   //Display new frame for synchronisation
-  updateBattleState(message) {
-    const action = message.toString().split("_")[0];
-    const senderId = message.toString().split("_")[1];
-    const data = message.toString().split("_")[2];
-    let laserY = "";
-    let shootPosX = "";
-    let dammage = 0;
-    if (action === "fire") {
-      shootPosX = data.split(",")[0];
-      laserY = data.split(",")[1] ? data.split(",")[1] : "";
-      //adversaryPosX = shootPosX;
-    } else if (action === "move" || action === "login") {
-      adversaryPosX = data;
-    } else if (action === "destroyed") {
-      adversaryPosX = "";
-      console.log(`${action} received`);
-    } else if (action === "win") {
-      console.log(`${action} received`);
-      this.client.close(1000, "Winner");
-    }
-    const adversary = adversaryPosX
-      ? adversaryPosX +
-        "\\\\dest_234//\n" +
-        adversaryPosX +
-        `***** ****${adversarylp}\n` +
-        adversaryPosX +
-        "     \\/"
-      : "";
-    let space = "\n";
-    let laser = laserY ? laserY + shootPosX + "|" : "";
-    for (let i = 0; i < 12 - laserY.length; i = i + 1) {
-      space = space + "\n";
-    }
-    if (
-      laser &&
-      laserY.length === 12 &&
-      shootPosX.length >= posX.length &&
-      shootPosX.length <= posX.length + 10
-    ) {
-      lp = lp - 1;
-      laser = laserY;
+  //   updateBattleState(message) {
+  //     const action = message.toString().split("_")[0];
+  //     const senderId = message.toString().split("_")[1];
+  //     const data = message.toString().split("_")[2];
+  //     let laserY = "";
+  //     let shootPosX = "";
+  //     let dammage = 0;
+  //     if (action === "fire") {
+  //       shootPosX = data.split(",")[0];
+  //       laserY = data.split(",")[1] ? data.split(",")[1] : "";
+  //       //adversaryPosX = shootPosX;
+  //     } else if (action === "move" || action === "login") {
+  //       adversaryPosX = data;
+  //     } else if (action === "destroyed") {
+  //       adversaryPosX = "";
+  //       console.log(`${action} received`);
+  //     } else if (action === "win") {
+  //       console.log(`${action} received`);
+  //       this.client.close(1000, "Winner");
+  //     }
+  //     const adversary = adversaryPosX
+  //       ? adversaryPosX +
+  //         "\\\\dest_234//\n" +
+  //         adversaryPosX +
+  //         `***** ****${adversarylp}\n` +
+  //         adversaryPosX +
+  //         "     \\/"
+  //       : "";
+  //     let space = "\n";
+  //     let laser = laserY ? laserY + shootPosX + "|" : "";
+  //     for (let i = 0; i < 12 - laserY.length; i = i + 1) {
+  //       space = space + "\n";
+  //     }
+  //     if (
+  //       laser &&
+  //       laserY.length === 12 &&
+  //       shootPosX.length >= posX.length &&
+  //       shootPosX.length <= posX.length + 10
+  //     ) {
+  //       lp = lp - 1;
+  //       laser = laserY;
 
-      //todo dammage representation
-      this.vessel = getStarship(this.posX, this.posY, this.lp, "vessel");
-    }
-    console.clear();
-    console.log(adversary + laser + space + this.vessel);
-    if (lp === 0) {
-      this.client.send(`destroyed_${id}_${posX}`);
-    }
-    this.vessel = getStarship(this.posX, this.posY, this.lp, "vessel");
-  }
+  //       //todo dammage representation
+  //       this.vessel = getStarship(this.posX, this.posY, this.lp, "vessel");
+  //     }
+  //     console.clear();
+  //     console.log(adversary + laser + space + this.vessel);
+  //     if (lp === 0) {
+  //       this.client.send(`destroyed_${id}_${posX}`);
+  //     }
+  //     this.vessel = getStarship(this.posX, this.posY, this.lp, "vessel");
+  //   }
 
-  endBattle(close) {
-    const winOrLose = lp > 0 ? "Winner" : "Game Over";
-    const endGame = figlet.textSync(winOrLose, {
-      font: "Graffiti",
-      horizontalLayout: "default",
-      verticalLayout: "default",
-      width: 80,
-      whitespaceBreak: true,
-    });
-    console.log(endGame);
-    process.exit();
-  }
+  //   endBattle(close) {
+  //     const winOrLose = lp > 0 ? "Winner" : "Game Over";
+  //     const endGame = figlet.textSync(winOrLose, {
+  //       font: "Graffiti",
+  //       horizontalLayout: "default",
+  //       verticalLayout: "default",
+  //       width: 80,
+  //       whitespaceBreak: true,
+  //     });
+  //     console.log(endGame);
+  //     process.exit();
+  //   }
 }
 
-const player = new player();
+const player0 = new player();

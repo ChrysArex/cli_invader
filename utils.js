@@ -1,7 +1,8 @@
-const screenXLimit = 60;
-const screenYLimit = 60;
+export const screenXLimit = 60;
+export const screenYLimit = 25;
 
-const objectsSize = {
+//these sizes refer to how much unit I have to add to the X or Y copmonent the get the end coordinates
+export const objectsSize = {
   vessel: [10, 2],
   opponent: [11, 3],
   shoot: [0, 1],
@@ -49,6 +50,7 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
 
 // This is the state manager responsible to render a consistent representation of the game state across all players (Frame)
 export function displayScene(sceneElements) {
+  //console.log(sceneElements);
   let finalFrame = "";
   let groupedElements = [];
 
@@ -94,16 +96,14 @@ export function displayScene(sceneElements) {
   console.log(finalFrame);
 }
 
-displayScene([
-  { posX: 8, posY: 0, type: "vessel", lp: 100 },
-  { posX: 20, posY: 4, type: "opponent", lp: 100 },
-  { posX: 2, posY: 2, type: "shoot", lp: 100 },
-  { posX: 25, posY: 2, type: "vessel", lp: 100 },
-  { posX: 5, posY: 3, type: "vessel", lp: 100 },
-  { posX: 9, posY: 7, type: "vessel", lp: 100 },
-]);
-
-Array.prototype.f;
+// displayScene([
+//   // { posX: 8, posY: 0, type: "vessel", lp: 100 },
+//   // { posX: 20, posY: 4, type: "opponent", lp: 100 },
+//   // { posX: 2, posY: 2, type: "shoot", lp: 100 },
+//   // { posX: 25, posY: 2, type: "vessel", lp: 100 },
+//   // { posX: 5, posY: 3, type: "vessel", lp: 100 },
+//   { posX: 12, posY: 7, type: "vessel", lp: 100 },
+// ]);
 
 export async function shoot(data) {
   let laserY = "\n\n\n\n\n\n\n\n\n\n\n";
