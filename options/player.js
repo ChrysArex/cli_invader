@@ -24,20 +24,20 @@ class player {
 
     //X and Y coordinates
     this.posX = 0;
-    this.posY = 0;
+    this.posY = 22;
 
     //the type of the player
     this.type = type;
 
     //list of object present in the game
-    this.sceneElements = [
-      {
-        posX: this.posX,
-        posY: this.posY,
-        type: this.type,
-        lp: this.lp,
-      },
-    ];
+    // this.sceneElements = [
+    //   {
+    //     posX: this.posX,
+    //     posY: this.posY,
+    //     type: this.type,
+    //     lp: this.lp,
+    //   },
+    // ];
 
     //the actual connection
     //this.client = new WebSocket("ws://localhost:3000/start");
@@ -63,7 +63,14 @@ class player {
    */
   enableStarshipNavigation() {
     const y = [];
-    for (let i = 0; i < objectsSize[this.type][1]; i++) y.push(this.posY + i);
+    this.sceneElements = [
+      { posX: 8, posY: 0, type: "vessel", lp: 100 },
+      { posX: 20, posY: 4, type: "opponent", lp: 100 },
+      { posX: 2, posY: 2, type: "shoot", lp: 100 },
+      { posX: this.posX, posY: this.posY, type: this.type, lp: this.lp },
+    ];
+    for (let i = 0; i < objectsSize[this.type][1] - 1; i++)
+      y.push(this.posY + i);
 
     const actions = {
       //escape
@@ -75,13 +82,9 @@ class player {
       "\x1b[C": () => {
         const obstacle = this.sceneElements.find((obj) => {
           if (
-            obj.posY === y[y.length - 1] &&
-            obj.posX === this.posX + Math.trunc(objectsSize[this.type][0] / 2)
-          )
-            return true;
-          if (
-            y.slice(0, y.length - 1).includes(obj.posY) &&
-            obj.posX === this.posX + objectsSize[this.type][0]
+            obj.posY < this.posY + objectsSize[this.type][1] &&
+            this.posY < obj.posY + objectsSize[obj.type][1] &&
+            obj.posX - (this.posX + objectsSize[this.type][0]) === 0
           )
             return true;
           return false;
@@ -95,13 +98,9 @@ class player {
       "\x1b[D": () => {
         const obstacle = this.sceneElements.find((obj) => {
           if (
-            obj.posY === y[y.length - 1] &&
-            obj.posX === this.posX + Math.trunc(objectsSize[this.type][0] / 2)
-          )
-            return true;
-          if (
-            y.slice(0, y.length - 1).includes(obj.posY) &&
-            obj.posX + objectsSize[obj.type][0] === this.posX
+            obj.posY < this.posY + objectsSize[this.type][1] &&
+            this.posY < obj.posY + objectsSize[obj.type][1] &&
+            this.posX - (obj.posX + objectsSize[obj.type][0]) === 0
           )
             return true;
           return false;
@@ -113,7 +112,7 @@ class player {
       "\x1b[A": () => {
         const obstacle = this.sceneElements.find((obj) => {
           if (
-            this.posY - obj.posY + objectsSize[obj.type][1] === 1 &&
+            this.posY - (obj.posY + objectsSize[obj.type][1]) === 0 &&
             this.posX < obj.posX + objectsSize[obj.type][0] &&
             obj.posX < this.posX + objectsSize[this.type][0]
           )
@@ -127,7 +126,7 @@ class player {
       "\x1b[B": () => {
         const obstacle = this.sceneElements.find((obj) => {
           if (
-            this.posY - obj.posY + objectsSize[obj.type][1] === -1 &&
+            obj.posY - (this.posY + objectsSize[this.type][1]) === 0 &&
             this.posX < obj.posX + objectsSize[obj.type][0] &&
             obj.posX < this.posX + objectsSize[this.type][0]
           )
@@ -147,7 +146,7 @@ class player {
       },
     };
     process.stdin.on("data", (data) => {
-      console.log(this.sceneElements);
+      //console.log(this.sceneElements);
       if (data.toString() in actions) {
         actions[data.toString()]();
         //this.sceneElements.pop();
@@ -157,7 +156,12 @@ class player {
         //   type: this.type,
         //   lp: this.lp,
         // });
-        displayScene(this.sceneElements);
+        displayScene([
+          { posX: 8, posY: 0, type: "vessel", lp: 100 },
+          { posX: 20, posY: 4, type: "opponent", lp: 100 },
+          { posX: 2, posY: 2, type: "shoot", lp: 100 },
+          { posX: this.posX, posY: this.posY, type: this.type, lp: this.lp },
+        ]);
       }
     });
     //this.client.send({ posX: this.posX, posY: this.posY });

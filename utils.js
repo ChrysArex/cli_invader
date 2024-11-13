@@ -3,7 +3,7 @@ export const screenYLimit = 25;
 
 //these sizes refer to how much unit I have to add to the X or Y copmonent the get the end coordinates
 export const objectsSize = {
-  vessel: [10, 2],
+  vessel: [13, 2],
   opponent: [11, 3],
   shoot: [0, 1],
 };
