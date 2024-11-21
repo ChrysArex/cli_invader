@@ -84,10 +84,19 @@ class player {
           if (
             obj.posY < this.posY + objectsSize[this.type][1] &&
             this.posY < obj.posY + objectsSize[obj.type][1] &&
-            obj.posX - (this.posX + objectsSize[this.type][0]) === 0
-          )
+            this.posX + objectsSize[this.type][0] >= obj.posX
+          ) {
+            if (
+              obj.type === "opponent" &&
+              this.posY === obj.posY + objectsSize[obj.type][1] - 1 &&
+              this.posX + objectsSize[this.type][0] <
+                obj.posX + objectsSize[obj.type][0] / 2
+            ) {
+              return false;
+            }
+
             return true;
-          return false;
+          }
         });
 
         if (!obstacle && this.posX < screenXLimit - objectsSize[this.type][0])

@@ -1,4 +1,4 @@
-export const screenXLimit = 60;
+export const screenXLimit = 100;
 export const screenYLimit = 25;
 
 //these sizes refer to how much unit I have to add to the X or Y copmonent the get the end coordinates
@@ -31,17 +31,23 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
 
     const GLYPH = {
       vessel: [`${lifePointRepr}____/\\____`, `  /||||  ||||\\`],
-      opponent: [`\\\\dest_234//`, `***** ****${lifePointRepr}`, `     \\/`],
+      opponent: [`\\\\dest_234//`, `***** ****${lifePointRepr}`, `\\/`],
       shoot: `|`,
     };
+
     let repr =
       elmt?.part !== undefined ? GLYPH[elmt.type][elmt.part] : GLYPH[elmt.type];
     //we add the representation of the element at his X coordinate and
     //copie the left and rigth part from the previous representation of the line
+    let shift = 0;
+    if (elmt.type === "opponent" && elmt.part === 2) {
+      shift = 5;
+    }
+
     line =
-      line.slice(0, elmt.posX) +
+      line.slice(0, elmt.posX + shift) +
       repr +
-      line.slice(elmt.posX + repr.length, screenXLimit);
+      line.slice(elmt.posX + shift + repr.length, screenXLimit);
     posXReference = elmt.posX;
   });
   subframe += line;
@@ -96,14 +102,14 @@ export function displayScene(sceneElements) {
   console.log(finalFrame);
 }
 
-// displayScene([
-//   // { posX: 8, posY: 0, type: "vessel", lp: 100 },
-//   // { posX: 20, posY: 4, type: "opponent", lp: 100 },
-//   // { posX: 2, posY: 2, type: "shoot", lp: 100 },
-//   // { posX: 25, posY: 2, type: "vessel", lp: 100 },
-//   // { posX: 5, posY: 3, type: "vessel", lp: 100 },
-//   { posX: 12, posY: 7, type: "vessel", lp: 100 },
-// ]);
+displayScene([
+  { posX: 8, posY: 0, type: "vessel", lp: 100 },
+  { posX: 20, posY: 4, type: "opponent", lp: 100 },
+  { posX: 2, posY: 2, type: "shoot", lp: 100 },
+  { posX: 25, posY: 2, type: "vessel", lp: 100 },
+  { posX: 5, posY: 3, type: "vessel", lp: 100 },
+  { posX: 12, posY: 7, type: "vessel", lp: 100 },
+]);
 
 export async function shoot(data) {
   let laserY = "\n\n\n\n\n\n\n\n\n\n\n";
