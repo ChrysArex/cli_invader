@@ -82,21 +82,24 @@ class player {
       "\x1b[C": () => {
         const obstacle = this.sceneElements.find((obj) => {
           if (
-            obj.posY < this.posY + objectsSize[this.type][1] &&
+            this.posY + objectsSize[this.type][1] > obj.posY &&
             this.posY < obj.posY + objectsSize[obj.type][1] &&
             this.posX + objectsSize[this.type][0] >= obj.posX
           ) {
-            if (
-              obj.type === "opponent" &&
-              this.posY === obj.posY + objectsSize[obj.type][1] - 1 &&
-              this.posX + objectsSize[this.type][0] <
-                obj.posX + objectsSize[obj.type][0] / 2
-            ) {
+            const test = {
+              vessel: this.posY + 1 === obj.posY,
+              opponent:
+                this.posY === obj.posY + 2 &&
+                this.posX + objectsSize[this.type][0] <=
+                  obj.posX + objectsSize[obj.type][0] / 2,
+            };
+            const cannon = test[obj.type];
+            if (cannon) {
               return false;
             }
-
             return true;
           }
+          return false;
         });
 
         if (!obstacle && this.posX < screenXLimit - objectsSize[this.type][0])
@@ -109,7 +112,7 @@ class player {
           if (
             obj.posY < this.posY + objectsSize[this.type][1] &&
             this.posY < obj.posY + objectsSize[obj.type][1] &&
-            this.posX - (obj.posX + objectsSize[obj.type][0]) === 0
+            obj.posX - this.posX + objectsSize[this.type][0] === 0
           )
             return true;
           return false;
