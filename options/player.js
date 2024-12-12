@@ -2,6 +2,7 @@ import { WebSocket } from "ws";
 import { eraseLines } from "ansi-escapes";
 import { v4 as uuidv4 } from "uuid";
 import figlet from "figlet";
+import { hasCollide } from "../collision.js";
 import {
   sleep,
   shoot,
@@ -29,6 +30,9 @@ class player {
     //the type of the player
     this.type = type;
 
+    this.width = objectsSize[this.type][0];
+    this.heigth = objectsSize[this.type][1] - 1;
+
     //list of object present in the game
     // this.sceneElements = [
     //   {
@@ -54,6 +58,13 @@ class player {
       type: this.type,
       lp: this.lp,
     };
+
+    //List of all the element present in a frame
+    this.sceneElements = [
+      { posX: 8, posY: 0, type: "vessel", lp: 100, width: 13, heigth: 1 },
+      { posX: 20, posY: 4, type: "opponent", lp: 100, width: 11, heigth: 2 },
+      { posX: 2, posY: 2, type: "shoot", lp: 100, width: 0, heigth: 0 },
+    ];
     this.enableStarshipNavigation();
   }
 
@@ -62,16 +73,6 @@ class player {
    * It basically set an listenner for keyboards inputs wich are then used to update the game state
    */
   enableStarshipNavigation() {
-    const y = [];
-    this.sceneElements = [
-      { posX: 8, posY: 0, type: "vessel", lp: 100 },
-      { posX: 20, posY: 4, type: "opponent", lp: 100 },
-      { posX: 2, posY: 2, type: "shoot", lp: 100 },
-      { posX: this.posX, posY: this.posY, type: this.type, lp: this.lp },
-    ];
-    for (let i = 0; i < objectsSize[this.type][1] - 1; i++)
-      y.push(this.posY + i);
-
     const actions = {
       //escape
       "\x1b": () => {
@@ -80,74 +81,36 @@ class player {
 
       //right move
       "\x1b[C": () => {
-        const obstacle = this.sceneElements.find((obj) => {
-          if (
-            this.posY + objectsSize[this.type][1] > obj.posY &&
-            this.posY < obj.posY + objectsSize[obj.type][1] &&
-            this.posX + objectsSize[this.type][0] >= obj.posX
-          ) {
-            const test = {
-              vessel: this.posY + 1 === obj.posY,
-              opponent:
-                this.posY === obj.posY + 2 &&
-                this.posX + objectsSize[this.type][0] <=
-                  obj.posX + objectsSize[obj.type][0] / 2,
-            };
-            const cannon = test[obj.type];
-            if (cannon) {
-              return false;
-            }
-            return true;
-          }
-          return false;
-        });
+        const obstacle = this.sceneElements.find((obj) =>
+          hasCollide("\x1b[C", { ...this, posX: this.posX + 1 }, obj),
+        );
 
-        if (!obstacle && this.posX < screenXLimit - objectsSize[this.type][0])
-          this.posX += 1;
+        if (!obstacle && this.posX < screenXLimit - this.width) this.posX += 1;
       },
 
       //left move
       "\x1b[D": () => {
-        const obstacle = this.sceneElements.find((obj) => {
-          if (
-            obj.posY < this.posY + objectsSize[this.type][1] &&
-            this.posY < obj.posY + objectsSize[obj.type][1] &&
-            obj.posX - this.posX + objectsSize[this.type][0] === 0
-          )
-            return true;
-          return false;
-        });
+        const obstacle = this.sceneElements.find((obj) =>
+          hasCollide("\x1b[D", { ...this, posX: this.posX - 1 }, obj),
+        );
         if (!obstacle && this.posX >= 1) this.posX -= 1;
       },
 
       //up move
       "\x1b[A": () => {
-        const obstacle = this.sceneElements.find((obj) => {
-          if (
-            this.posY - (obj.posY + objectsSize[obj.type][1]) === 0 &&
-            this.posX < obj.posX + objectsSize[obj.type][0] &&
-            obj.posX < this.posX + objectsSize[this.type][0]
-          )
-            return true;
-          return false;
-        });
+        const obstacle = this.sceneElements.find((obj) =>
+          hasCollide("\x1b[A", { ...this, posY: this.posY - 1 }, obj),
+        );
         if (!obstacle && this.posY > 0) this.posY -= 1;
       },
 
       //down move
       "\x1b[B": () => {
-        const obstacle = this.sceneElements.find((obj) => {
-          if (
-            obj.posY - (this.posY + objectsSize[this.type][1]) === 0 &&
-            this.posX < obj.posX + objectsSize[obj.type][0] &&
-            obj.posX < this.posX + objectsSize[this.type][0]
-          )
-            return true;
-          return false;
-        });
+        const obstacle = this.sceneElements.find((obj) =>
+          hasCollide("\x1b[B", { ...this, posY: this.posY + 1 }, obj),
+        );
 
-        if (!obstacle && this.posY + objectsSize[this.type][1] < screenYLimit)
-          this.posY += 1;
+        if (!obstacle && this.posY + this.heigth < screenYLimit) this.posY += 1;
       },
 
       //shoot
@@ -161,19 +124,10 @@ class player {
       //console.log(this.sceneElements);
       if (data.toString() in actions) {
         actions[data.toString()]();
-        //this.sceneElements.pop();
-        // this.sceneElements.push({
-        //   posX: this.posX,
-        //   posY: this.posY,
-        //   type: this.type,
-        //   lp: this.lp,
-        // });
-        displayScene([
-          { posX: 8, posY: 0, type: "vessel", lp: 100 },
-          { posX: 20, posY: 4, type: "opponent", lp: 100 },
-          { posX: 2, posY: 2, type: "shoot", lp: 100 },
-          { posX: this.posX, posY: this.posY, type: this.type, lp: this.lp },
-        ]);
+        //give a copy to the function
+        const scene = this.sceneElements.slice();
+        scene.push(this);
+        displayScene(scene);
       }
     });
     //this.client.send({ posX: this.posX, posY: this.posY });

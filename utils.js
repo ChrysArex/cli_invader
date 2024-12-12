@@ -98,7 +98,7 @@ export function displayScene(sceneElements) {
     finalFrame += getSubFrameRepr(verticallySortedElmt, posYReference);
     posYReference = verticallySortedElmt[0].posY;
   });
-  console.clear();
+  //console.clear();
   console.log(finalFrame);
 }
 
