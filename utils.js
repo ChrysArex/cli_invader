@@ -1,3 +1,5 @@
+import { hasCollide } from "./collision.js";
+
 export const screenXLimit = 100;
 export const screenYLimit = 25;
 
@@ -102,66 +104,39 @@ export function displayScene(sceneElements) {
   console.log(finalFrame);
 }
 
-displayScene([
-  { posX: 8, posY: 0, type: "vessel", lp: 100 },
-  { posX: 20, posY: 4, type: "opponent", lp: 100 },
-  { posX: 2, posY: 2, type: "shoot", lp: 100 },
-  { posX: 25, posY: 2, type: "vessel", lp: 100 },
-  { posX: 5, posY: 3, type: "vessel", lp: 100 },
-  { posX: 12, posY: 7, type: "vessel", lp: 100 },
-]);
+// displayScene([
+//   { posX: 8, posY: 0, type: "vessel", lp: 100 },
+//   { posX: 20, posY: 4, type: "opponent", lp: 100 },
+//   { posX: 2, posY: 2, type: "shoot", lp: 100 },
+//   { posX: 25, posY: 2, type: "vessel", lp: 100 },
+//   { posX: 5, posY: 3, type: "vessel", lp: 100 },
+//   { posX: 12, posY: 7, type: "vessel", lp: 100 },
+// ]);
 
-export async function shoot(data) {
-  let laserY = "\n\n\n\n\n\n\n\n\n\n\n";
-  data = data + "      ";
-  while (laserY.length !== 0) {
-    laserY = laserY.slice(0, laserY.length - 1);
-    let adversary =
-      adversaryPosX !== ""
-        ? adversaryPosX +
-          "\\\\dest_234//\n" +
-          adversaryPosX +
-          `***** ****${adversarylp}\n` +
-          adversaryPosX +
-          "     \\/"
-        : "";
-    let laser = laserY ? laserY + data + "|" : "";
-    let space = "\n";
-    for (let i = 0; i < 12 - laserY.length; i = i + 1) {
-      space = space + "\n";
-    }
-    if (
-      laserY.length === 0 &&
-      data.length >= adversaryPosX.length &&
-      data.length <= adversaryPosX.length + 10
-    ) {
-      adversarylp = adversarylp - 1;
-      laser = laserY;
-      adversary =
-        adversaryPosX !== ""
-          ? adversaryPosX +
-            "\\\\dest_234//\n" +
-            adversaryPosX +
-            `* * * * * * * * *${adversarylp}\n` +
-            adversaryPosX +
-            "     /\\"
-          : "";
-      console.clear();
-      console.log(adversary + laser + space + this.vessel);
-      await sleep(200);
-      adversary =
-        adversaryPosX +
-        "\\\\dest_234//\n" +
-        adversaryPosX +
-        `***** ****${adversarylp}\n` +
-        adversaryPosX +
-        "     \\/";
-    }
-    if (adversarylp === 0) {
-      this.client.close();
-    }
-    console.clear();
-    console.log(adversary + laser + space + this.vessel);
+//Represent shoots on the scene and manage their states
+export async function shoot(sceneElements, vessel) {
+  const theShoot = {
+    type: "shoot",
+    posX: vessel.posX + vessel.width / 2 + 1,
+    posY: vessel.posY - 1,
+    width: objectsSize["shoot"][0],
+    heigth: objectsSize["shoot"][1] - 1,
+    lp: 100,
+  };
+  sceneElements.push(vessel);
+  sceneElements.push(theShoot);
+  while (theShoot.posY > 0) {
+    displayScene(sceneElements.slice());
     await sleep(100);
+    const obstacle = sceneElements.find((obj) =>
+      hasCollide(" ", theShoot, obj),
+    );
+    if (obstacle) {
+      console.log("I enter the condition");
+      sceneElements.pop();
+      displayScene(sceneElements.slice());
+      break;
+    }
+    theShoot.posY -= 1;
   }
 }

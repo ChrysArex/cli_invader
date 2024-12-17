@@ -62,6 +62,7 @@ class player {
     //List of all the element present in a frame
     this.sceneElements = [
       { posX: 8, posY: 0, type: "vessel", lp: 100, width: 13, heigth: 1 },
+      { posX: 50, posY: 2, type: "vessel", lp: 100, width: 13, heigth: 1 },
       { posX: 20, posY: 4, type: "opponent", lp: 100, width: 11, heigth: 2 },
       { posX: 2, posY: 2, type: "shoot", lp: 100, width: 0, heigth: 0 },
     ];
@@ -114,10 +115,10 @@ class player {
       },
 
       //shoot
-      " ": async () => {
+      " ": () => {
         //
         //this.client.send(`fire_${id}_${posX}`);
-        await shoot(posX);
+        shoot(this.sceneElements.slice(), this);
       },
     };
     process.stdin.on("data", (data) => {
