@@ -93,14 +93,14 @@ export function displayScene(sceneElements) {
   //The grouped elements are sorted by ascending Y value
   groupedElements.sort((a, b) => a[a.length - 1] - b[b.length - 1]);
   let posYReference = 0;
-  //We get each sub-frame's representation and add it to the final frame representing the sce
+  //We get each sub-frame's representation and add it to the final frame representing the scene
   groupedElements.forEach((verticallySortedElmt) => {
     verticallySortedElmt.splice(verticallySortedElmt.length - 1, 1);
     verticallySortedElmt.sort((a, b) => a.posX - b.posX);
     finalFrame += getSubFrameRepr(verticallySortedElmt, posYReference);
     posYReference = verticallySortedElmt[0].posY;
   });
-  //console.clear();
+  console.clear();
   console.log(finalFrame);
 }
 
@@ -128,15 +128,15 @@ export async function shoot(sceneElements, vessel) {
   while (theShoot.posY > 0) {
     displayScene(sceneElements.slice());
     await sleep(100);
-    const obstacle = sceneElements.find((obj) =>
-      hasCollide(" ", theShoot, obj),
-    );
+    const obstacle = sceneElements
+      .slice(0, sceneElements.length - 1)
+      .find((obj) => hasCollide(" ", theShoot, obj));
     if (obstacle) {
-      console.log("I enter the condition");
-      sceneElements.pop();
-      displayScene(sceneElements.slice());
+      obstacle.lp -= 1;
       break;
     }
     theShoot.posY -= 1;
   }
+  sceneElements.pop();
+  displayScene(sceneElements.slice());
 }

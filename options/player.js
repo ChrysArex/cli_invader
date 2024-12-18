@@ -116,13 +116,10 @@ class player {
 
       //shoot
       " ": () => {
-        //
-        //this.client.send(`fire_${id}_${posX}`);
         shoot(this.sceneElements.slice(), this);
       },
     };
     process.stdin.on("data", (data) => {
-      //console.log(this.sceneElements);
       if (data.toString() in actions) {
         actions[data.toString()]();
         //give a copy to the function
