@@ -30,15 +30,17 @@ async function shoot(action, id, data) {
   }
 }
 
-// class server {
-//   constructor() {
-//     this.app = express();
-//     expressWs(app);
-//     this.players = [];
+class server {
+  constructor() {
+    this.app = express();
+    expressWs(app);
+    this.players = [];
 
-//     app.ws("/multi-player-game", this.connectToTheServer);
-//   }
-// }
+    app.ws("/log-to-battle", this.logToBattle);
+  }
+
+  logToBattle(ws, req) {}
+}
 
 const app = express();
 let players = [];
