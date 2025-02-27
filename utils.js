@@ -3,6 +3,13 @@ import { hasCollide } from "./collision.js";
 export const screenXLimit = 100;
 export const screenYLimit = 25;
 
+let sceneElements = [
+  { posX: 8, posY: 0, type: "vessel", lp: 100, width: 13, heigth: 1 },
+  { posX: 50, posY: 2, type: "vessel", lp: 100, width: 13, heigth: 1 },
+  { posX: 20, posY: 4, type: "opponent", lp: 100, width: 11, heigth: 2 },
+  { posX: 2, posY: 2, type: "shoot", lp: 100, width: 0, heigth: 0 },
+];
+
 //these sizes refer to how much unit I have to add to the X or Y copmonent the get the end coordinates
 export const objectsSize = {
   vessel: [13, 2],

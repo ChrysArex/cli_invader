@@ -18,7 +18,10 @@ class player {
     process.stdin.resume();
 
     //player's ID
-    this.id = uuidv4();
+    this.id = crypto.randomUUID();
+
+    //Id of the session the user is in
+    this.sessionId = null;
 
     //life point
     this.lp = 100;
@@ -27,37 +30,20 @@ class player {
     this.posX = 0;
     this.posY = 22;
 
-    //the type of the player
+    //the type of the team the player is in
     this.type = type;
 
     this.width = objectsSize[this.type][0];
     this.heigth = objectsSize[this.type][1] - 1;
 
-    //list of object present in the game
-    // this.sceneElements = [
-    //   {
-    //     posX: this.posX,
-    //     posY: this.posY,
-    //     type: this.type,
-    //     lp: this.lp,
-    //   },
-    // ];
-
     //the actual connection
-    //this.client = new WebSocket("ws://localhost:3000/start");
+    this.client = new WebSocket("ws://localhost:3000/newGame", {
+      headers: { playerid: id },
+    });
 
-    // this.client.on("error", console.error);
+    this.client.on("error", console.error);
     // this.client.on("open", this.enableStarshipNavigation);
-    // this.client.on("message", this.updateBattleState);
     // this.client.on("close", this.endBattle);
-
-    // The JSON representation of this object
-    this.jsonRepr = {
-      posX: this.posX,
-      posY: this.posY,
-      type: this.type,
-      lp: this.lp,
-    };
 
     //List of all the element present in a frame
     this.sceneElements = [
@@ -67,6 +53,7 @@ class player {
       { posX: 2, posY: 2, type: "shoot", lp: 100, width: 0, heigth: 0 },
     ];
     this.enableStarshipNavigation();
+    this.updateBattleState();
   }
 
   /*
@@ -120,71 +107,38 @@ class player {
       },
     };
     process.stdin.on("data", (data) => {
-      if (data.toString() in actions) {
+      const action = data.toString();
+      if (action in actions) {
         actions[data.toString()]();
         //give a copy to the function
         const scene = this.sceneElements.slice();
         scene.push(this);
         displayScene(scene);
+        this.client.send(
+          JSON.stringify({
+            type: action,
+            playerType: this.type,
+            senderId: this.id,
+            sessionId: this.sessionId,
+            content: this.scene,
+          }),
+        );
       }
     });
-    //this.client.send({ posX: this.posX, posY: this.posY });
   }
 
   //listen to incoming message from the server/client and update the battle view
   //Display new frame for synchronisation
-  //   updateBattleState(message) {
-  //     const action = message.toString().split("_")[0];
-  //     const senderId = message.toString().split("_")[1];
-  //     const data = message.toString().split("_")[2];
-  //     let laserY = "";
-  //     let shootPosX = "";
-  //     let dammage = 0;
-  //     if (action === "fire") {
-  //       shootPosX = data.split(",")[0];
-  //       laserY = data.split(",")[1] ? data.split(",")[1] : "";
-  //       //adversaryPosX = shootPosX;
-  //     } else if (action === "move" || action === "login") {
-  //       adversaryPosX = data;
-  //     } else if (action === "destroyed") {
-  //       adversaryPosX = "";
-  //       console.log(`${action} received`);
-  //     } else if (action === "win") {
-  //       console.log(`${action} received`);
-  //       this.client.close(1000, "Winner");
-  //     }
-  //     const adversary = adversaryPosX
-  //       ? adversaryPosX +
-  //         "\\\\dest_234//\n" +
-  //         adversaryPosX +
-  //         `***** ****${adversarylp}\n` +
-  //         adversaryPosX +
-  //         "     \\/"
-  //       : "";
-  //     let space = "\n";
-  //     let laser = laserY ? laserY + shootPosX + "|" : "";
-  //     for (let i = 0; i < 12 - laserY.length; i = i + 1) {
-  //       space = space + "\n";
-  //     }
-  //     if (
-  //       laser &&
-  //       laserY.length === 12 &&
-  //       shootPosX.length >= posX.length &&
-  //       shootPosX.length <= posX.length + 10
-  //     ) {
-  //       lp = lp - 1;
-  //       laser = laserY;
-
-  //       //todo dammage representation
-  //       this.vessel = getStarship(this.posX, this.posY, this.lp, "vessel");
-  //     }
-  //     console.clear();
-  //     console.log(adversary + laser + space + this.vessel);
-  //     if (lp === 0) {
-  //       this.client.send(`destroyed_${id}_${posX}`);
-  //     }
-  //     this.vessel = getStarship(this.posX, this.posY, this.lp, "vessel");
-  //   }
+  updateBattleState() {
+    this.client.on("message", (message) => {
+      let msg = JSON.parse(message);
+      if (msg.type === "init") {
+        this.sessionId = msg.ssId;
+        this.type = msg.playerType;
+      }
+      displayScene(msg.content);
+    });
+  }
 
   //   endBattle(close) {
   //     const winOrLose = lp > 0 ? "Winner" : "Game Over";
