@@ -1,5 +1,6 @@
 import express from "express";
 import expressWs from "express-ws";
+import { objectsSize } from "./utils";
 
 class GameServer {
   constructor(app) {
@@ -7,11 +8,12 @@ class GameServer {
     this.ssId = "init";
     this.server = app ? app : express();
     this.typeIdx = -1;
+    this.vesselPosXRef = 2;
+    this.opponentPosXRef = 2;
     expressWs(this.server);
     this.server.get("/hello", (req, res) => res.send("hello my gee\n"));
     this.server.ws("/newGame", this.newGame.bind(this));
   }
-
   newGame(ws, req) {
     //console.log(req.headers["playerid"]);
     this.initSession(ws, req.headers["playerid"]); //manage session for the new connection
@@ -20,7 +22,12 @@ class GameServer {
 
   initSession(ws, playerId) {
     this.typeIdx += 1;
-    const playerType = this.typeIdx % 2 === 0 ? "vessel" : "opponent";
+    const playerTypeInfo =
+      this.typeIdx % 2 === 0
+        ? ["vessel", this.vesselPosXRef, 5]
+        : ["opponent", this.opponentPosXRef, 0];
+    // const initPosX = playerType === "vessel" ? this.vesselPosXRef : this.opponentPosXRef;
+    // const initPosY = playerType === "vessel" ? 5 : 0;
     if (
       Object.keys(this.sessions).length !== 0 &&
       this.sessions[this.ssId].length < 6
@@ -30,15 +37,6 @@ class GameServer {
         playerId: playerId,
         playerType: playerType,
       });
-
-      ws.send(
-        JSON.stringify({
-          type: "init",
-          ssId: this.ssId,
-          playerType: playerType,
-        }),
-      );
-
       console.log(
         `new player added, the sessions so far: ${this.sessions[this.ssId]}`,
       );
@@ -47,23 +45,28 @@ class GameServer {
       this.sessions[this.ssId] = [
         { ws: ws, playerId: playerId, playerType: playerType },
       ];
-
-      ws.send(
-        JSON.stringify({
-          type: "init",
-          ssId: this.ssId,
-          playerType: playerType,
-        }),
-      );
-
+      this.vesselPosXRef = 2;
+      this.opponentPosXRef = 2;
       console.log(`new sessions created, sessions id: ${this.ssId}`);
     }
+
+    ws.send(
+      JSON.stringify({
+        type: "init",
+        ssId: this.ssId,
+        playerType: playerTypeInfo[0],
+        initPosX: playerTypeInfo[1],
+        initPosY: playerTypeInfo[2],
+      }),
+    );
+    this.vesselPosXRef += objectsSize["vessel"][0] + 1;
+    this.opponentPosXRef += objectsSize["opponent"][0] + 1;
   }
 
   setUpListeners(ws, playerId) {
     ws.on("message", (msg) => {
-      console.log("Message broadcasted");
       this.broadcast(msg, this.sessions[JSON.parse(msg).sessionId]);
+      console.log("Message broadcasted");
     });
 
     ws.on("close", () => {

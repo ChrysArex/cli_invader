@@ -135,6 +135,8 @@ class player {
       if (msg.type === "init") {
         this.sessionId = msg.ssId;
         this.type = msg.playerType;
+        this.posX = initPosX;
+        this.posY = initPosY;
       }
       displayScene(msg.content);
     });
