@@ -23,9 +23,9 @@ process.stdin.on("data", (data) => {
 player.on("open", () => console.log("I am connected"));
 player.on("message", (message) => {
   let msg = JSON.parse(message);
-  if (msg.type === "init") {
+  if (msg.messageType === "init") {
     sessionId = msg.ssId;
     playerType = msg.playerType;
   }
-  console.log(`Message: ${msg}`);
+  console.log(`Message: ${message}`);
 });

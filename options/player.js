@@ -38,7 +38,7 @@ class player {
 
     //the actual connection
     this.client = new WebSocket("ws://localhost:3000/newGame", {
-      headers: { playerid: id },
+      headers: { playerid: this.id },
     });
 
     this.client.on("error", console.error);
@@ -46,12 +46,8 @@ class player {
     // this.client.on("close", this.endBattle);
 
     //List of all the element present in a frame
-    this.sceneElements = [
-      { posX: 8, posY: 0, type: "vessel", lp: 100, width: 13, heigth: 1 },
-      { posX: 50, posY: 2, type: "vessel", lp: 100, width: 13, heigth: 1 },
-      { posX: 20, posY: 4, type: "opponent", lp: 100, width: 11, heigth: 2 },
-      { posX: 2, posY: 2, type: "shoot", lp: 100, width: 0, heigth: 0 },
-    ];
+    this.sceneElements = [];
+
     this.enableStarshipNavigation();
     this.updateBattleState();
   }
@@ -69,36 +65,59 @@ class player {
 
       //right move
       "\x1b[C": () => {
-        const obstacle = this.sceneElements.find((obj) =>
-          hasCollide("\x1b[C", { ...this, posX: this.posX + 1 }, obj),
-        );
+        const obstacle = this.sceneElements.find((obj) => {
+          if (obj.playerId !== this.playerId) {
+            return hasCollide("\x1b[C", { ...this, posX: this.posX + 1 }, obj);
+          }
+        });
 
-        if (!obstacle && this.posX < screenXLimit - this.width) this.posX += 1;
+        if (!obstacle && this.posX < screenXLimit - this.width) {
+          this.posX += 1;
+          this.sceneElements.find((obj) => obj.playerId === this.id).posX =
+            this.posX;
+        }
       },
 
       //left move
       "\x1b[D": () => {
-        const obstacle = this.sceneElements.find((obj) =>
-          hasCollide("\x1b[D", { ...this, posX: this.posX - 1 }, obj),
-        );
-        if (!obstacle && this.posX >= 1) this.posX -= 1;
+        const obstacle = this.sceneElements.find((obj) => {
+          if (obj.playerId !== this.playerId) {
+            return hasCollide("\x1b[D", { ...this, posX: this.posX - 1 }, obj);
+          }
+        });
+        if (!obstacle && this.posX >= 1) {
+          this.posX -= 1;
+          this.sceneElements.find((obj) => obj.playerId === this.id).posX =
+            this.posX;
+        }
       },
 
       //up move
       "\x1b[A": () => {
-        const obstacle = this.sceneElements.find((obj) =>
-          hasCollide("\x1b[A", { ...this, posY: this.posY - 1 }, obj),
-        );
-        if (!obstacle && this.posY > 0) this.posY -= 1;
+        const obstacle = this.sceneElements.find((obj) => {
+          if (obj.playerId !== this.playerId) {
+            return hasCollide("\x1b[A", { ...this, posY: this.posY - 1 }, obj);
+          }
+        });
+        if (!obstacle && this.posY > 0) {
+          this.posY -= 1;
+          this.sceneElements.find((obj) => obj.playerId === this.id).posY =
+            this.posY;
+        }
       },
 
       //down move
       "\x1b[B": () => {
-        const obstacle = this.sceneElements.find((obj) =>
-          hasCollide("\x1b[B", { ...this, posY: this.posY + 1 }, obj),
-        );
-
-        if (!obstacle && this.posY + this.heigth < screenYLimit) this.posY += 1;
+        const obstacle = this.sceneElements.find((obj) => {
+          if (obj.playerId !== this.playerId) {
+            return hasCollide("\x1b[B", { ...this, posY: this.posY + 1 }, obj);
+          }
+        });
+        if (!obstacle && this.posY + this.heigth < screenYLimit) {
+          this.posY += 1;
+          this.sceneElements.find((obj) => obj.playerId === this.id).posY =
+            this.posY;
+        }
       },
 
       //shoot
@@ -112,15 +131,16 @@ class player {
         actions[data.toString()]();
         //give a copy to the function
         const scene = this.sceneElements.slice();
-        scene.push(this);
+        //console.log(this.sceneElements);
         displayScene(scene);
         this.client.send(
           JSON.stringify({
-            type: action,
-            playerType: this.type,
-            senderId: this.id,
+            messageType: "broadcast",
+            topic: "stateUpdate",
             sessionId: this.sessionId,
-            content: this.scene,
+            senderId: this.id,
+            playerType: this.type,
+            content: this.sceneElements,
           }),
         );
       }
@@ -132,13 +152,16 @@ class player {
   updateBattleState() {
     this.client.on("message", (message) => {
       let msg = JSON.parse(message);
-      if (msg.type === "init") {
-        this.sessionId = msg.ssId;
-        this.type = msg.playerType;
-        this.posX = initPosX;
-        this.posY = initPosY;
+      if (msg.topic === "init") {
+        this.sessionId = msg.content.ssId;
+        this.type = msg.content.playerType;
+        this.posX = msg.content.initPosX;
+        this.posY = msg.content.initPosY;
+        this.sceneElements = msg.content.gameState;
+      } else if (msg.topic === "stateUpdate") {
+        this.sceneElements = msg.content;
       }
-      displayScene(msg.content);
+      displayScene(this.sceneElements);
     });
   }
 
