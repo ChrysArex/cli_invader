@@ -66,7 +66,7 @@ class player {
       //right move
       "\x1b[C": () => {
         const obstacle = this.sceneElements.find((obj) => {
-          if (obj.playerId !== this.playerId) {
+          if (obj.playerId !== this.id) {
             return hasCollide("\x1b[C", { ...this, posX: this.posX + 1 }, obj);
           }
         });
@@ -81,7 +81,7 @@ class player {
       //left move
       "\x1b[D": () => {
         const obstacle = this.sceneElements.find((obj) => {
-          if (obj.playerId !== this.playerId) {
+          if (obj.playerId !== this.id) {
             return hasCollide("\x1b[D", { ...this, posX: this.posX - 1 }, obj);
           }
         });
@@ -95,7 +95,7 @@ class player {
       //up move
       "\x1b[A": () => {
         const obstacle = this.sceneElements.find((obj) => {
-          if (obj.playerId !== this.playerId) {
+          if (obj.playerId !== this.id) {
             return hasCollide("\x1b[A", { ...this, posY: this.posY - 1 }, obj);
           }
         });
@@ -109,7 +109,7 @@ class player {
       //down move
       "\x1b[B": () => {
         const obstacle = this.sceneElements.find((obj) => {
-          if (obj.playerId !== this.playerId) {
+          if (obj.playerId !== this.id) {
             return hasCollide("\x1b[B", { ...this, posY: this.posY + 1 }, obj);
           }
         });
@@ -158,6 +158,10 @@ class player {
         this.posX = msg.content.initPosX;
         this.posY = msg.content.initPosY;
         this.sceneElements = msg.content.gameState;
+        let self = this.sceneElements.find((obj) => obj.playerId === this.id);
+        self.posX = this.posX;
+        self.posY = this.posY;
+        console.log(self);
       } else if (msg.topic === "stateUpdate") {
         this.sceneElements = msg.content;
       }

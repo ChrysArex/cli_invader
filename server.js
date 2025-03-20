@@ -29,7 +29,7 @@ class GameServer {
 
     if (
       Object.keys(this.sessions).length !== 0 &&
-      this.sessions[this.ssId].length < 6
+      this.sessions[this.ssId].length <= 6
     ) {
       this.sessions[this.ssId].push({
         ws: ws,
@@ -46,7 +46,7 @@ class GameServer {
         heigth: objectsSize[playerTypeInfo[0]][1],
       });
       console.log(
-        `new player added, the sessions so far: ${this.sessions[this.ssId]}`,
+        `new player added, the sessions so far: ${this.sessions[this.ssId][0]}`,
       );
     } else {
       this.ssId = crypto.randomUUID();

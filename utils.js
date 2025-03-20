@@ -3,13 +3,6 @@ import { hasCollide } from "./collision.js";
 export const screenXLimit = 100;
 export const screenYLimit = 25;
 
-let sceneElements = [
-  { posX: 8, posY: 0, type: "vessel", lp: 100, width: 13, heigth: 1 },
-  { posX: 50, posY: 2, type: "vessel", lp: 100, width: 13, heigth: 1 },
-  { posX: 20, posY: 4, type: "opponent", lp: 100, width: 11, heigth: 2 },
-  { posX: 2, posY: 2, type: "shoot", lp: 100, width: 0, heigth: 0 },
-];
-
 //these sizes refer to how much unit I have to add to the X or Y copmonent the get the end coordinates
 export const objectsSize = {
   vessel: [13, 2],
@@ -64,8 +57,8 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
 }
 
 // This is the state manager responsible to render a consistent representation of the game state across all players (Frame)
-export function displayScene(sceneElements) {
-  //console.log(sceneElements);
+export function displayScene(gameState) {
+  let sceneElements = gameState.slice();
   let finalFrame = "";
   let groupedElements = [];
 
@@ -125,15 +118,27 @@ export async function shoot(sceneElements, vessel) {
   const theShoot = {
     type: "shoot",
     posX: vessel.posX + vessel.width / 2 + 1,
-    posY: vessel.posY - 1,
+    posY: vessel.type === "vessel" ? vessel.posY - 1 : vessel.posY + 3,
     width: objectsSize["shoot"][0],
     heigth: objectsSize["shoot"][1] - 1,
-    lp: 100,
+    lp: 1,
   };
-  sceneElements.push(vessel);
+  //sceneElements.push(vessel);
   sceneElements.push(theShoot);
-  while (theShoot.posY > 0) {
+  while (
+    vessel.type === "vessel" ? theShoot.posY > 0 : theShoot.posY < screenYLimit
+  ) {
     displayScene(sceneElements.slice());
+    vessel.client.send(
+      JSON.stringify({
+        messageType: "broadcast",
+        topic: "stateUpdate",
+        sessionId: vessel.sessionId,
+        senderId: vessel.id,
+        playerType: "shoot",
+        content: sceneElements,
+      }),
+    );
     await sleep(100);
     const obstacle = sceneElements
       .slice(0, sceneElements.length - 1)
@@ -142,8 +147,18 @@ export async function shoot(sceneElements, vessel) {
       obstacle.lp -= 1;
       break;
     }
-    theShoot.posY -= 1;
+    theShoot.posY += vessel.type === "vessel" ? -1 : 1;
   }
   sceneElements.pop();
   displayScene(sceneElements.slice());
+  vessel.client.send(
+    JSON.stringify({
+      messageType: "broadcast",
+      topic: "stateUpdate",
+      sessionId: vessel.sessionId,
+      senderId: vessel.id,
+      playerType: "shoot",
+      content: sceneElements,
+    }),
+  );
 }
