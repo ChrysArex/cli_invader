@@ -1,6 +1,7 @@
 import express from "express";
 import expressWs from "express-ws";
 import { objectsSize } from "./utils.js";
+import { hasCollide } from "./collision.js";
 
 class GameServer {
   constructor(app) {
@@ -100,6 +101,12 @@ class GameServer {
 
   setUpListeners(ws, playerId) {
     ws.on("message", (msg) => {
+      const msgObj = JSON.parse(msg);
+      if (msgObj.topic === "shootSomeone") {
+        //perform a verification of the shoot and a reference update
+        //hasCollide(shift, obj1, obj2);
+        msgObj.topic = "shootSomeone";
+      }
       this.broadcast(
         msg,
         this.sessions[JSON.parse(msg).sessionId].slice(
@@ -128,12 +135,6 @@ class GameServer {
         player.playerType === msgObj.playerType
       ) {
         player.ws.send(message);
-        // else
-        //   player.ws.send(
-        //     JSON.stringify(
-        //       "A message has been sent by a guy of the other team, here is you version of it!",
-        //     ),
-        //   );
       }
     });
   }

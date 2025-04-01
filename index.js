@@ -5,6 +5,7 @@ import chalk from "chalk";
 import { select, Separator } from "@inquirer/prompts";
 import figlet from "figlet";
 import { play } from "./options/options.js";
+import { fork } from "child_process";
 
 const banner = figlet.textSync("CLI INVADER", {
   font: "Graffiti",

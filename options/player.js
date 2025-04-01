@@ -122,7 +122,7 @@ class player {
 
       //shoot
       " ": () => {
-        shoot(this.sceneElements.slice(), this);
+        shoot(this.sceneElements, this);
       },
     };
     process.stdin.on("data", (data) => {

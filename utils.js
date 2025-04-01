@@ -34,7 +34,7 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
     const GLYPH = {
       vessel: [`${lifePointRepr}____/\\____`, `  /||||  ||||\\`],
       opponent: [`\\\\dest_234//`, `***** ****${lifePointRepr}`, `\\/`],
-      shoot: `|`,
+      shoot: `||`,
     };
 
     let repr =
@@ -123,6 +123,7 @@ export async function shoot(sceneElements, vessel) {
     heigth: objectsSize["shoot"][1] - 1,
     lp: 1,
   };
+  let target = null;
   //sceneElements.push(vessel);
   sceneElements.push(theShoot);
   while (
@@ -140,11 +141,14 @@ export async function shoot(sceneElements, vessel) {
       }),
     );
     await sleep(100);
-    const obstacle = sceneElements
+    target = sceneElements
       .slice(0, sceneElements.length - 1)
       .find((obj) => hasCollide(" ", theShoot, obj));
-    if (obstacle) {
-      obstacle.lp -= 1;
+    if (target) {
+      target.lp -= 1;
+      if (target.lp === 0) {
+        sceneElements.splice(sceneElements.indexOf(target), 1);
+      }
       break;
     }
     theShoot.posY += vessel.type === "vessel" ? -1 : 1;
@@ -154,11 +158,12 @@ export async function shoot(sceneElements, vessel) {
   vessel.client.send(
     JSON.stringify({
       messageType: "broadcast",
-      topic: "stateUpdate",
+      topic: target ? "shootSomeone" : "stateUpdate",
       sessionId: vessel.sessionId,
       senderId: vessel.id,
       playerType: "shoot",
       content: sceneElements,
+      target: target,
     }),
   );
 }
