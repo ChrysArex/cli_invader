@@ -30,14 +30,14 @@ class GameServer {
 
     if (
       Object.keys(this.sessions).length !== 0 &&
-      this.sessions[this.ssId].length <= 6
+      this.sessions[this.ssId].clientCount <= 6
     ) {
-      this.sessions[this.ssId].push({
+      this.sessions[this.ssId]["connections"][playerId] = {
         ws: ws,
         playerId: playerId,
         playerType: playerTypeInfo[0],
-      });
-      this.sessions[this.ssId][0].push({
+      };
+      this.sessions[this.ssId]["referenceGameState"][playerId] = {
         playerId: playerId,
         posX: playerTypeInfo[1],
         posY: playerTypeInfo[2],
@@ -45,26 +45,37 @@ class GameServer {
         lp: 100,
         width: objectsSize[playerTypeInfo[0]][0],
         heigth: objectsSize[playerTypeInfo[0]][1],
-      });
+      };
+      this.sessions[this.ssId]["clientCount"] += 1;
       console.log(
-        `new player added, the sessions so far: ${this.sessions[this.ssId][0]}`,
+        `new player added, the sessions so far: ${this.sessions[this.ssId]["referenceGameState"]}`,
       );
     } else {
       this.ssId = crypto.randomUUID();
-      this.sessions[this.ssId] = [
-        [
-          {
-            playerId: playerId,
-            posX: playerTypeInfo[1],
-            posY: playerTypeInfo[2],
-            type: playerTypeInfo[0],
-            lp: 100,
-            width: objectsSize[playerTypeInfo[0]][0],
-            heigth: objectsSize[playerTypeInfo[0]][1],
-          },
-        ],
-        { ws: ws, playerId: playerId, playerType: playerTypeInfo[0] },
-      ];
+      this.sessions[this.ssId] = {
+        referenceGameState: {},
+        connections: {},
+        clientCount: 0,
+      };
+
+      this.sessions[this.ssId]["referenceGameState"][playerId] = {
+        playerId: playerId,
+        posX: playerTypeInfo[1],
+        posY: playerTypeInfo[2],
+        type: playerTypeInfo[0],
+        lp: 100,
+        width: objectsSize[playerTypeInfo[0]][0],
+        heigth: objectsSize[playerTypeInfo[0]][1],
+      };
+
+      this.sessions[this.ssId]["connections"][playerId] = {
+        ws: ws,
+        playerId: playerId,
+        playerType: playerTypeInfo[0],
+      };
+
+      this.sessions[this.ssId]["clientCount"] += 1;
+
       this.vesselPosXRef = 2;
       this.opponentPosXRef = 2;
       console.log(`new sessions created, sessions id: ${this.ssId}`);
@@ -81,7 +92,9 @@ class GameServer {
           playerType: playerTypeInfo[0],
           initPosX: playerTypeInfo[1],
           initPosY: playerTypeInfo[2],
-          gameState: this.sessions[this.ssId][0],
+          gameState: Object.values(
+            this.sessions[this.ssId]["referenceGameState"],
+          ),
         },
       }),
     );
@@ -91,9 +104,12 @@ class GameServer {
         topic: "stateUpdate",
         sessionId: this.ssId,
         senderId: null,
-        content: this.sessions[this.ssId][0],
+        content: Object.values(this.sessions[this.ssId]["referenceGameState"]),
       }),
-      this.sessions[this.ssId].slice(1, this.sessions[this.ssId].length - 1),
+      Object.values(this.sessions[this.ssId]["connections"]).slice(
+        0,
+        this.sessions[this.ssId]["clientCount"] - 1,
+      ),
     );
     this.vesselPosXRef += objectsSize["vessel"][0] + 1;
     this.opponentPosXRef += objectsSize["opponent"][0] + 1;
@@ -102,17 +118,51 @@ class GameServer {
   setUpListeners(ws, playerId) {
     ws.on("message", (msg) => {
       const msgObj = JSON.parse(msg);
-      if (msgObj.topic === "shootSomeone") {
+      if (msgObj.topic === "stateUpdate") {
+        this.sessions[msgObj.sessionId]["referenceGameState"][msgObj.senderId] =
+          msgObj.content;
+      } else if (msgObj.topic === "shootSomeone") {
         //perform a verification of the shoot and a reference update
         //hasCollide(shift, obj1, obj2);
+        this.sessions[msgObj.sessionId]["referenceGameState"][msgObj.senderId] =
+          msgObj.content;
         msgObj.topic = "shootSomeone";
+      } else if (msgObj.topic === "endGame") {
+        delete this.sessions[msgObj.sessionId]["referenceGameState"][
+          msgObj.senderId
+        ];
+        delete this.sessions[msgObj.sessionId]["connections"][msgObj.senderId];
+        this.sessions[msgObj.sessionId]["clientCount"] -= 1;
+        if (msgObj.target) {
+          if (msgObj.target.lp === 0) {
+            const targetConnection =
+              this.sessions[msgObj.sessionId]["connections"][
+                msgObj.target.playerId
+              ];
+            targetConnection.ws.close();
+            delete this.sessions[msgObj.sessionId]["connections"][
+              msgObj.target.playerId
+            ];
+            delete this.sessions[msgObj.sessionId]["referenceGameState"][
+              msgObj.target.playerId
+            ];
+          } else {
+            this.sessions[msgObj.sessionId]["referenceGameState"][
+              msgObj.target.playerId
+            ] = msgObj.target;
+          }
+        }
       }
+
+      if (msgObj.authorId) msgObj.senderId = msgObj.authorId;
+
+      msgObj.content = Object.values(
+        this.sessions[msgObj.sessionId]["referenceGameState"],
+      );
+
       this.broadcast(
-        msg,
-        this.sessions[JSON.parse(msg).sessionId].slice(
-          1,
-          this.sessions[this.ssId].length,
-        ),
+        JSON.stringify(msgObj),
+        Object.values(this.sessions[msgObj.sessionId]["connections"]),
       );
       console.log("Message broadcasted");
     });

@@ -43,7 +43,7 @@ class player {
 
     this.client.on("error", console.error);
     // this.client.on("open", this.enableStarshipNavigation);
-    // this.client.on("close", this.endBattle);
+    this.client.on("close", this.endBattle.bind(this));
 
     //List of all the element present in a frame
     this.sceneElements = [];
@@ -60,6 +60,7 @@ class player {
     const actions = {
       //escape
       "\x1b": () => {
+        this.endBattle();
         process.exit();
       },
 
@@ -140,7 +141,15 @@ class player {
             sessionId: this.sessionId,
             senderId: this.id,
             playerType: this.type,
-            content: this.sceneElements,
+            content: {
+              playerId: this.id,
+              posX: this.posX,
+              posY: this.posY,
+              type: this.type,
+              lp: this.lp,
+              width: this.width,
+              heigth: this.heigth,
+            },
           }),
         );
       }
@@ -161,26 +170,39 @@ class player {
         let self = this.sceneElements.find((obj) => obj.playerId === this.id);
         self.posX = this.posX;
         self.posY = this.posY;
-        console.log(self);
       } else if (msg.topic === "stateUpdate") {
+        this.sceneElements = msg.content;
+      } else if (msg.topic === "shootSomeone") {
+        this.sceneElements = msg.content;
+      } else if (msg.topic === "endGame") {
         this.sceneElements = msg.content;
       }
       displayScene(this.sceneElements);
     });
   }
 
-  //   endBattle(close) {
-  //     const winOrLose = lp > 0 ? "Winner" : "Game Over";
-  //     const endGame = figlet.textSync(winOrLose, {
-  //       font: "Graffiti",
-  //       horizontalLayout: "default",
-  //       verticalLayout: "default",
-  //       width: 80,
-  //       whitespaceBreak: true,
-  //     });
-  //     console.log(endGame);
-  //     process.exit();
-  //   }
+  endBattle(close) {
+    this.client.send(
+      JSON.stringify({
+        messageType: "broadcast",
+        topic: "endGame",
+        sessionId: this.sessionId,
+        senderId: this.id,
+        playerType: this.type,
+        content: {},
+      }),
+    );
+    //     const winOrLose = lp > 0 ? "Winner" : "Game Over";
+    //     const endGame = figlet.textSync(winOrLose, {
+    //       font: "Graffiti",
+    //       horizontalLayout: "default",
+    //       verticalLayout: "default",
+    //       width: 80,
+    //       whitespaceBreak: true,
+    //     });
+    //     console.log(endGame);
+    //     process.exit();
+  }
 }
 
 const player0 = new player();

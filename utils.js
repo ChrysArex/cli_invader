@@ -115,31 +115,34 @@ export function displayScene(gameState) {
 
 //Represent shoots on the scene and manage their states
 export async function shoot(sceneElements, vessel) {
+  const id = crypto.randomUUID();
   const theShoot = {
     type: "shoot",
+    senderId: id,
     posX: vessel.posX + vessel.width / 2 + 1,
     posY: vessel.type === "vessel" ? vessel.posY - 1 : vessel.posY + 3,
     width: objectsSize["shoot"][0],
     heigth: objectsSize["shoot"][1] - 1,
     lp: 1,
   };
+  vessel.client.send(
+    JSON.stringify({
+      messageType: "broadcast",
+      topic: "shootSomeone",
+      sessionId: vessel.sessionId,
+      senderId: id,
+      authorId: vessel.id,
+      playerType: "shoot",
+      content: theShoot,
+    }),
+  );
   let target = null;
-  //sceneElements.push(vessel);
   sceneElements.push(theShoot);
   while (
     vessel.type === "vessel" ? theShoot.posY > 0 : theShoot.posY < screenYLimit
   ) {
     displayScene(sceneElements.slice());
-    vessel.client.send(
-      JSON.stringify({
-        messageType: "broadcast",
-        topic: "stateUpdate",
-        sessionId: vessel.sessionId,
-        senderId: vessel.id,
-        playerType: "shoot",
-        content: sceneElements,
-      }),
-    );
+
     await sleep(100);
     target = sceneElements
       .slice(0, sceneElements.length - 1)
@@ -152,17 +155,29 @@ export async function shoot(sceneElements, vessel) {
       break;
     }
     theShoot.posY += vessel.type === "vessel" ? -1 : 1;
+    vessel.client.send(
+      JSON.stringify({
+        messageType: "broadcast",
+        topic: "shootSomeone",
+        sessionId: vessel.sessionId,
+        senderId: id,
+        authorId: vessel.id,
+        playerType: "shoot",
+        content: theShoot,
+      }),
+    );
   }
   sceneElements.pop();
   displayScene(sceneElements.slice());
   vessel.client.send(
     JSON.stringify({
       messageType: "broadcast",
-      topic: target ? "shootSomeone" : "stateUpdate",
+      topic: "endGame",
       sessionId: vessel.sessionId,
-      senderId: vessel.id,
+      senderId: id,
+      authorId: vessel.id,
       playerType: "shoot",
-      content: sceneElements,
+      content: theShoot,
       target: target,
     }),
   );
