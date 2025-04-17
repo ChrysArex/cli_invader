@@ -2,6 +2,7 @@ import { WebSocket } from "ws";
 import { eraseLines } from "ansi-escapes";
 import { v4 as uuidv4 } from "uuid";
 import figlet from "figlet";
+import readline from "node:readline";
 import { hasCollide } from "../collision.js";
 import {
   sleep,
@@ -11,6 +12,7 @@ import {
   screenYLimit,
   objectsSize,
 } from "../utils.js";
+import { console } from "node:inspector/promises";
 
 class player {
   constructor(type = "vessel") {
@@ -43,7 +45,7 @@ class player {
 
     this.client.on("error", console.error);
     // this.client.on("open", this.enableStarshipNavigation);
-    this.client.on("close", this.endBattle.bind(this));
+    this.client.on("close", this.endBattle);
 
     //List of all the element present in a frame
     this.sceneElements = [];
@@ -59,8 +61,9 @@ class player {
   enableStarshipNavigation() {
     const actions = {
       //escape
-      "\x1b": () => {
-        this.endBattle();
+      "\x1B": () => {
+        console.log("I am exiting !!!!");
+        //this.endBattle();
         process.exit();
       },
 
@@ -122,13 +125,14 @@ class player {
       },
 
       //shoot
-      " ": () => {
-        shoot(this.sceneElements, this);
+      " ": async () => {
+        await shoot(this.sceneElements, this);
       },
     };
     process.stdin.on("data", (data) => {
       const action = data.toString();
       if (action in actions) {
+        console.log("print something before leaving");
         actions[data.toString()]();
         //give a copy to the function
         const scene = this.sceneElements.slice();
@@ -181,27 +185,28 @@ class player {
     });
   }
 
-  endBattle(close) {
-    this.client.send(
-      JSON.stringify({
-        messageType: "broadcast",
-        topic: "endGame",
-        sessionId: this.sessionId,
-        senderId: this.id,
-        playerType: this.type,
-        content: {},
-      }),
-    );
-    //     const winOrLose = lp > 0 ? "Winner" : "Game Over";
-    //     const endGame = figlet.textSync(winOrLose, {
-    //       font: "Graffiti",
-    //       horizontalLayout: "default",
-    //       verticalLayout: "default",
-    //       width: 80,
-    //       whitespaceBreak: true,
-    //     });
-    //     console.log(endGame);
-    //     process.exit();
+  endBattle() {
+    // this.client.send(
+    //   JSON.stringify({
+    //     messageType: "broadcast",
+    //     topic: "endGame",
+    //     sessionId: this.sessionId,
+    //     senderId: this.id,
+    //     playerType: this.type,
+    //     content: {},
+    //   }),
+    // );
+    //process.stdin.setRawMode(true);
+    console.clear();
+    const endGame = figlet.textSync("Game Over", {
+      font: "Graffiti",
+      horizontalLayout: "default",
+      verticalLayout: "default",
+      width: 80,
+      whitespaceBreak: true,
+    });
+    console.log(endGame);
+    console.log("Press escape key (esc) to go back to menu");
   }
 }
 

@@ -51,6 +51,9 @@ class GameServer {
         `new player added, the sessions so far: ${this.sessions[this.ssId]["referenceGameState"]}`,
       );
     } else {
+      this.vesselPosXRef = 2;
+      this.opponentPosXRef = 2;
+
       this.ssId = crypto.randomUUID();
       this.sessions[this.ssId] = {
         referenceGameState: {},
@@ -76,8 +79,6 @@ class GameServer {
 
       this.sessions[this.ssId]["clientCount"] += 1;
 
-      this.vesselPosXRef = 2;
-      this.opponentPosXRef = 2;
       console.log(`new sessions created, sessions id: ${this.ssId}`);
     }
 
@@ -103,13 +104,10 @@ class GameServer {
         messageType: "broadcast",
         topic: "stateUpdate",
         sessionId: this.ssId,
-        senderId: null,
+        senderId: playerId,
         content: Object.values(this.sessions[this.ssId]["referenceGameState"]),
       }),
-      Object.values(this.sessions[this.ssId]["connections"]).slice(
-        0,
-        this.sessions[this.ssId]["clientCount"] - 1,
-      ),
+      Object.values(this.sessions[this.ssId]["connections"]),
     );
     this.vesselPosXRef += objectsSize["vessel"][0] + 1;
     this.opponentPosXRef += objectsSize["opponent"][0] + 1;
@@ -128,24 +126,31 @@ class GameServer {
           msgObj.content;
         msgObj.topic = "shootSomeone";
       } else if (msgObj.topic === "endGame") {
+        //Perform necessary verification to ensure the player has been destroyed
         delete this.sessions[msgObj.sessionId]["referenceGameState"][
           msgObj.senderId
         ];
         delete this.sessions[msgObj.sessionId]["connections"][msgObj.senderId];
-        this.sessions[msgObj.sessionId]["clientCount"] -= 1;
+        if (msgObj.playerType === "vessel" || msgObj.playerType === "opponent")
+          this.sessions[msgObj.sessionId]["clientCount"] -= 1;
         if (msgObj.target) {
           if (msgObj.target.lp === 0) {
             const targetConnection =
               this.sessions[msgObj.sessionId]["connections"][
                 msgObj.target.playerId
               ];
-            targetConnection.ws.close();
+            targetConnection.ws.close(1000, "player has been destroyed");
             delete this.sessions[msgObj.sessionId]["connections"][
               msgObj.target.playerId
             ];
             delete this.sessions[msgObj.sessionId]["referenceGameState"][
               msgObj.target.playerId
             ];
+            if (
+              msgObj.target.playerType === "vessel" ||
+              msgObj.target.playerType === "opponent"
+            )
+              this.sessions[msgObj.sessionId]["clientCount"] -= 1;
           } else {
             this.sessions[msgObj.sessionId]["referenceGameState"][
               msgObj.target.playerId

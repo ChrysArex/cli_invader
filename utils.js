@@ -141,7 +141,7 @@ export async function shoot(sceneElements, vessel) {
   while (
     vessel.type === "vessel" ? theShoot.posY > 0 : theShoot.posY < screenYLimit
   ) {
-    displayScene(sceneElements.slice());
+    displayScene(sceneElements);
 
     await sleep(100);
     target = sceneElements
@@ -167,7 +167,7 @@ export async function shoot(sceneElements, vessel) {
       }),
     );
   }
-  sceneElements.pop();
+  sceneElements.splice(sceneElements.indexOf(theShoot), 1);
   displayScene(sceneElements.slice());
   vessel.client.send(
     JSON.stringify({
