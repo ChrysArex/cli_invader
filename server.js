@@ -127,6 +127,8 @@ class GameServer {
         msgObj.topic = "shootSomeone";
       } else if (msgObj.topic === "endGame") {
         //Perform necessary verification to ensure the player has been destroyed
+
+        //First we remove the shoot(or the destroyed element) from the RGS and Connections
         delete this.sessions[msgObj.sessionId]["referenceGameState"][
           msgObj.senderId
         ];
@@ -134,27 +136,42 @@ class GameServer {
         if (msgObj.playerType === "vessel" || msgObj.playerType === "opponent")
           this.sessions[msgObj.sessionId]["clientCount"] -= 1;
         if (msgObj.target) {
-          if (msgObj.target.lp === 0) {
+          if (
+            msgObj.target.lp === 0 &&
+            this.sessions[msgObj.sessionId]["connections"][
+              msgObj.target.playerId
+            ]
+          ) {
             const targetConnection =
               this.sessions[msgObj.sessionId]["connections"][
                 msgObj.target.playerId
               ];
-            targetConnection.ws.close(1000, "player has been destroyed");
+            targetConnection.ws.send(
+              JSON.stringify({
+                messageType: "unique",
+                topic: "destroyed",
+                sessionId: msgObj.target.sessionId,
+                senderId: null,
+              }),
+            );
+            targetConnection.ws.close(1000, "you'v been destroyed =)");
             delete this.sessions[msgObj.sessionId]["connections"][
               msgObj.target.playerId
             ];
             delete this.sessions[msgObj.sessionId]["referenceGameState"][
               msgObj.target.playerId
             ];
-            if (
-              msgObj.target.playerType === "vessel" ||
-              msgObj.target.playerType === "opponent"
-            )
-              this.sessions[msgObj.sessionId]["clientCount"] -= 1;
+            this.sessions[msgObj.sessionId]["clientCount"] -= 1;
           } else {
-            this.sessions[msgObj.sessionId]["referenceGameState"][
-              msgObj.target.playerId
-            ] = msgObj.target;
+            if (msgObj.target.type === "shoot") {
+              delete this.sessions[msgObj.sessionId]["referenceGameState"][
+                msgObj.target.playerId
+              ];
+            } else {
+              this.sessions[msgObj.sessionId]["referenceGameState"][
+                msgObj.target.playerId
+              ] = msgObj.target;
+            }
           }
         }
       }

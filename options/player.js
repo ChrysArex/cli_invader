@@ -45,7 +45,7 @@ class player {
 
     this.client.on("error", console.error);
     // this.client.on("open", this.enableStarshipNavigation);
-    this.client.on("close", this.endBattle);
+    this.client.on("close", this.endBattle.bind(this));
 
     //List of all the element present in a frame
     this.sceneElements = [];
@@ -62,9 +62,13 @@ class player {
     const actions = {
       //escape
       "\x1B": () => {
-        console.log("I am exiting !!!!");
-        //this.endBattle();
-        process.exit();
+        const answer = displayScene(["exit"]);
+        if (answer === "y") {
+          process.exit();
+        } else {
+          process.stdin.setRawMode(true);
+          process.stdin.resume();
+        }
       },
 
       //right move
@@ -131,12 +135,12 @@ class player {
     };
     process.stdin.on("data", (data) => {
       const action = data.toString();
-      if (action in actions) {
-        console.log("print something before leaving");
-        actions[data.toString()]();
+      if (this.sceneElements.length === 0) {
+        process.exit();
+      } else if (action in actions) {
+        actions[action]();
         //give a copy to the function
         const scene = this.sceneElements.slice();
-        //console.log(this.sceneElements);
         displayScene(scene);
         this.client.send(
           JSON.stringify({
@@ -180,6 +184,8 @@ class player {
         this.sceneElements = msg.content;
       } else if (msg.topic === "endGame") {
         this.sceneElements = msg.content;
+      } else if (msg.topic === "destroyed") {
+        this.sceneElements = [];
       }
       displayScene(this.sceneElements);
     });
@@ -197,16 +203,16 @@ class player {
     //   }),
     // );
     //process.stdin.setRawMode(true);
-    console.clear();
-    const endGame = figlet.textSync("Game Over", {
-      font: "Graffiti",
-      horizontalLayout: "default",
-      verticalLayout: "default",
-      width: 80,
-      whitespaceBreak: true,
-    });
-    console.log(endGame);
-    console.log("Press escape key (esc) to go back to menu");
+    // const endGame = figlet.textSync("Game Over", {
+    //   font: "Graffiti",
+    //   horizontalLayout: "default",
+    //   verticalLayout: "default",
+    //   width: 80,
+    //   whitespaceBreak: true,
+    // });
+    // console.log(endGame);
+    // console.log("Press escape key (esc) to go back to menu");
+    // process.exit();
   }
 }
 

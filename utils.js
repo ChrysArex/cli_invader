@@ -1,6 +1,9 @@
 import { hasCollide } from "./collision.js";
+import { question } from "readline-sync";
+import { confirm } from "@inquirer/prompts";
+import figlet from "figlet";
 
-export const screenXLimit = 100;
+export const screenXLimit = 150;
 export const screenYLimit = 25;
 
 //these sizes refer to how much unit I have to add to the X or Y copmonent the get the end coordinates
@@ -56,8 +59,36 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
   return subframe;
 }
 
-// This is the state manager responsible to render a consistent representation of the game state across all players (Frame)
+// This function is responsible to render a consistent representation of the game state across all players (Frame)
 export function displayScene(gameState) {
+  if (gameState.length === 1 && gameState[0] === "exit") {
+    console.clear();
+    const endGame = figlet.textSync("Do you really want to leave the party ?", {
+      font: "Graffiti",
+      horizontalLayout: "default",
+      verticalLayout: "default",
+      width: 80,
+      whitespaceBreak: true,
+    });
+    const answer = question("Do you really want to leave the party ? (y/n)");
+    return answer;
+  } else if (gameState.length === 0) {
+    console.clear();
+    const d = "test";
+    const stats = `You have been killed by: ${d} \nkills: ${d} \nshots: ${d} \ndammages: ${d} \n`;
+    const endGame = figlet.textSync("Game Over", {
+      font: "Graffiti",
+      horizontalLayout: "default",
+      verticalLayout: "default",
+      width: 80,
+      whitespaceBreak: true,
+    });
+    console.log(endGame);
+    console.log(stats);
+    console.log("Press any key to exit");
+    return;
+  }
+
   let sceneElements = gameState.slice();
   let finalFrame = "";
   let groupedElements = [];
