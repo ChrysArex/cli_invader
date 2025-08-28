@@ -1,13 +1,13 @@
 import { hasCollide } from "./collision.js";
 import { question } from "readline-sync";
-import { confirm } from "@inquirer/prompts";
 import figlet from "figlet";
 
 export const screenXLimit = 150;
 export const screenYLimit = 25;
 
-//these sizes refer to how much unit I have to add to the X or Y copmonent the get the end coordinates
+//these sizes refer to how much unit I have to add to the X or Y component to get the end coordinates
 export const objectsSize = {
+  //object: [width, height]
   vessel: [13, 2],
   opponent: [11, 3],
   shoot: [0, 1],
@@ -23,7 +23,7 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
   let line = " ".repeat(screenXLimit);
   let posXReference = 0;
   let offset = 0;
-  horizontalElmts.forEach((elmt, index, array) => {
+  horizontalElmts.forEach((elmt, index) => {
     let lifePointRepr = elmt.lp.toString();
     if (lifePointRepr.length === 2) {
       lifePointRepr = `0${lifePointRepr}`;
@@ -60,19 +60,13 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
 }
 
 // This function is responsible to render a consistent representation of the game state across all players (Frame)
-export function displayScene(gameState) {
+export function displayScene(GS) {
+  let gameState = Object.values(GS).slice();
   if (gameState.length === 1 && gameState[0] === "exit") {
     console.clear();
-    const endGame = figlet.textSync("Do you really want to leave the party ?", {
-      font: "Graffiti",
-      horizontalLayout: "default",
-      verticalLayout: "default",
-      width: 80,
-      whitespaceBreak: true,
-    });
     const answer = question("Do you really want to leave the party ? (y/n)");
     return answer;
-  } else if (gameState.length === 0) {
+  } else if (gameState.length === 1 && gameState[0] === "destroyed") {
     console.clear();
     const d = "test";
     const stats = `You have been killed by: ${d} \nkills: ${d} \nshots: ${d} \ndammages: ${d} \n`;
@@ -89,12 +83,19 @@ export function displayScene(gameState) {
     return;
   }
 
-  let sceneElements = gameState.slice();
+  let sceneElements = gameState;
   let finalFrame = "";
   let groupedElements = [];
 
   //First we cut out multi-line element in sub-object
   for (let i = 0; i < sceneElements.length; i += 1) {
+    console.log("sceneElements[i]:", sceneElements[i]);
+    console.log("sceneElements[i].type:", sceneElements[i].type);
+    console.log("objectsSize keys:", Object.keys(objectsSize));
+    console.log(
+      "objectsSize[sceneElements[i].type]:",
+      objectsSize[sceneElements[i].type],
+    );
     let chunckNumber = objectsSize[sceneElements[i].type][1];
     if (chunckNumber > 1) {
       for (let j = 0; j < chunckNumber; j++) {
@@ -144,72 +145,47 @@ export function displayScene(gameState) {
 //   { posX: 12, posY: 7, type: "vessel", lp: 100 },
 // ]);
 
-//Represent shoots on the scene and manage their states
-export async function shoot(sceneElements, vessel) {
-  const id = crypto.randomUUID();
-  const theShoot = {
-    type: "shoot",
-    senderId: id,
-    posX: vessel.posX + vessel.width / 2 + 1,
-    posY: vessel.type === "vessel" ? vessel.posY - 1 : vessel.posY + 3,
-    width: objectsSize["shoot"][0],
-    heigth: objectsSize["shoot"][1] - 1,
-    lp: 1,
-  };
-  vessel.client.send(
-    JSON.stringify({
-      messageType: "broadcast",
-      topic: "shootSomeone",
-      sessionId: vessel.sessionId,
-      senderId: id,
-      authorId: vessel.id,
-      playerType: "shoot",
-      content: theShoot,
-    }),
+export function validateGameObject(obj) {
+  return (
+    obj &&
+    obj.id &&
+    obj.type &&
+    obj.posX !== undefined &&
+    obj.posY !== undefined
   );
-  let target = null;
-  sceneElements.push(theShoot);
-  while (
-    vessel.type === "vessel" ? theShoot.posY > 0 : theShoot.posY < screenYLimit
-  ) {
-    displayScene(sceneElements);
+}
+export async function addToSceneElements(newElement) {
+  await this.redisClient.hSet(
+    "sceneElements",
+    newElement.id,
+    JSON.stringify(newElement),
+  );
+}
 
-    await sleep(100);
-    target = sceneElements
-      .slice(0, sceneElements.length - 1)
-      .find((obj) => hasCollide(" ", theShoot, obj));
-    if (target) {
-      target.lp -= 1;
-      if (target.lp === 0) {
-        sceneElements.splice(sceneElements.indexOf(target), 1);
-      }
-      break;
-    }
-    theShoot.posY += vessel.type === "vessel" ? -1 : 1;
-    vessel.client.send(
-      JSON.stringify({
-        messageType: "broadcast",
-        topic: "shootSomeone",
-        sessionId: vessel.sessionId,
-        senderId: id,
-        authorId: vessel.id,
-        playerType: "shoot",
-        content: theShoot,
-      }),
+export async function removeFromSceneElements(elementId) {
+  await this.redisClient.hDel("sceneElements", elementId);
+}
+
+export async function updateInSceneElements(elementId, updates) {
+  const currentData = await this.redisClient.hGet("sceneElements", elementId);
+  if (currentData) {
+    const element = JSON.parse(currentData);
+    const updatedElement = { ...element, ...updates };
+    await this.redisClient.hSet(
+      "sceneElements",
+      elementId,
+      JSON.stringify(updatedElement),
     );
   }
-  sceneElements.splice(sceneElements.indexOf(theShoot), 1);
-  displayScene(sceneElements.slice());
-  vessel.client.send(
-    JSON.stringify({
-      messageType: "broadcast",
-      topic: "endGame",
-      sessionId: vessel.sessionId,
-      senderId: id,
-      authorId: vessel.id,
-      playerType: "shoot",
-      content: theShoot,
-      target: target,
-    }),
-  );
+}
+
+export async function getAllSceneElements() {
+  const allElements = await this.redisClient.hGetAll("sceneElements");
+  const sceneElements = {};
+
+  for (const [id, elementJson] of Object.entries(allElements)) {
+    sceneElements[id] = JSON.parse(elementJson);
+  }
+
+  return sceneElements;
 }

@@ -1,26 +1,31 @@
 import { WebSocket } from "ws";
-import { eraseLines } from "ansi-escapes";
+import { fork } from "node:child_process";
 import { v4 as uuidv4 } from "uuid";
-import figlet from "figlet";
-import readline from "node:readline";
+// import figlet from "figlet";
 import { hasCollide } from "../collision.js";
 import {
-  sleep,
-  shoot,
   displayScene,
   screenXLimit,
   screenYLimit,
   objectsSize,
+  validateGameObject,
+  addToSceneElements,
+  removeFromSceneElements,
+  updateInSceneElements,
+  sleep,
 } from "../utils.js";
 import { console } from "node:inspector/promises";
+import { createClient } from "redis";
+import { log } from "node:console";
 
 class player {
-  constructor(type = "vessel") {
+  constructor(redisClient, type = "vessel") {
     process.stdin.setRawMode(true);
     process.stdin.resume();
+    process.stdout.write("\x1B[?25l");
 
     //player's ID
-    this.id = crypto.randomUUID();
+    this.id = uuidv4();
 
     //Id of the session the user is in
     this.sessionId = null;
@@ -38,20 +43,43 @@ class player {
     this.width = objectsSize[this.type][0];
     this.heigth = objectsSize[this.type][1] - 1;
 
+    //the redis client connection
+    this.redisClient = redisClient;
+
+    this.redisClient.del("sceneElements");
+    this.redisClient.del("shots");
+
+    //List of all the element present in a frame
+    this.sceneElements = {};
+    this.redisClient.hSet(
+      "sceneElements",
+      this.id,
+      JSON.stringify({
+        id: this.id,
+        posX: this.posX,
+        posY: this.posY,
+        type: this.type,
+        lp: this.lp,
+        width: this.width,
+        heigth: this.heigth,
+        playerId: this.id,
+      }),
+    );
+    //List of all the shoot in the game
+    // this.shots = [];
+    // this.redisClient.set("shots", JSON.stringify(this.shots));
+
     //the actual connection
     this.client = new WebSocket("ws://localhost:3000/newGame", {
       headers: { playerid: this.id },
     });
-
     this.client.on("error", console.error);
-    // this.client.on("open", this.enableStarshipNavigation);
-    this.client.on("close", this.endBattle.bind(this));
 
-    //List of all the element present in a frame
-    this.sceneElements = [];
-
-    this.enableStarshipNavigation();
+    //listennes for incoming messages from server and player
     this.updateBattleState();
+    this.enableStarshipNavigation();
+
+    this.enventLoop();
   }
 
   /*
@@ -62,86 +90,152 @@ class player {
     const actions = {
       //escape
       "\x1B": () => {
-        const answer = displayScene(["exit"]);
-        if (answer === "y") {
-          process.exit();
-        } else {
-          process.stdin.setRawMode(true);
-          process.stdin.resume();
-        }
+        this.endBattle();
       },
 
       //right move
       "\x1b[C": () => {
-        const obstacle = this.sceneElements.find((obj) => {
+        const obstacle = Object.values(this.sceneElements).find((obj) => {
           if (obj.playerId !== this.id) {
-            return hasCollide("\x1b[C", { ...this, posX: this.posX + 1 }, obj);
+            return hasCollide({ ...this, posX: this.posX + 1 }, obj);
           }
         });
 
         if (!obstacle && this.posX < screenXLimit - this.width) {
           this.posX += 1;
-          this.sceneElements.find((obj) => obj.playerId === this.id).posX =
-            this.posX;
+          this.sceneElements[this.id].posX = this.posX;
         }
+        const self = {
+          id: this.id,
+          posX: this.posX,
+          posY: this.posY,
+          type: this.type,
+          lp: this.lp,
+          width: this.width,
+          heigth: this.heigth,
+        };
+        return self;
       },
 
       //left move
       "\x1b[D": () => {
-        const obstacle = this.sceneElements.find((obj) => {
+        const obstacle = Object.values(this.sceneElements).find((obj) => {
           if (obj.playerId !== this.id) {
-            return hasCollide("\x1b[D", { ...this, posX: this.posX - 1 }, obj);
+            return hasCollide({ ...this, posX: this.posX - 1 }, obj);
           }
         });
         if (!obstacle && this.posX >= 1) {
           this.posX -= 1;
-          this.sceneElements.find((obj) => obj.playerId === this.id).posX =
-            this.posX;
+          this.sceneElements[this.id].posX = this.posX;
         }
+        const self = {
+          id: this.id,
+          posX: this.posX,
+          posY: this.posY,
+          type: this.type,
+          lp: this.lp,
+          width: this.width,
+          heigth: this.heigth,
+        };
+        return self;
       },
 
       //up move
       "\x1b[A": () => {
-        const obstacle = this.sceneElements.find((obj) => {
+        const obstacle = Object.values(this.sceneElements).find((obj) => {
           if (obj.playerId !== this.id) {
-            return hasCollide("\x1b[A", { ...this, posY: this.posY - 1 }, obj);
+            return hasCollide({ ...this, posY: this.posY - 1 }, obj);
           }
         });
         if (!obstacle && this.posY > 0) {
           this.posY -= 1;
-          this.sceneElements.find((obj) => obj.playerId === this.id).posY =
-            this.posY;
+          this.sceneElements[this.id].posY = this.posY;
         }
+        const self = {
+          id: this.id,
+          posX: this.posX,
+          posY: this.posY,
+          type: this.type,
+          lp: this.lp,
+          width: this.width,
+          heigth: this.heigth,
+        };
+        return self;
       },
 
       //down move
       "\x1b[B": () => {
-        const obstacle = this.sceneElements.find((obj) => {
+        const obstacle = Object.values(this.sceneElements).find((obj) => {
           if (obj.playerId !== this.id) {
-            return hasCollide("\x1b[B", { ...this, posY: this.posY + 1 }, obj);
+            return hasCollide({ ...this, posY: this.posY + 1 }, obj);
           }
         });
         if (!obstacle && this.posY + this.heigth < screenYLimit) {
           this.posY += 1;
-          this.sceneElements.find((obj) => obj.playerId === this.id).posY =
-            this.posY;
+          this.sceneElements[this.id].posY = this.posY;
         }
+        const self = {
+          id: this.id,
+          posX: this.posX,
+          posY: this.posY,
+          type: this.type,
+          lp: this.lp,
+          width: this.width,
+          heigth: this.heigth,
+        };
+        return self;
       },
 
       //shoot
       " ": async () => {
-        await shoot(this.sceneElements, this);
+        const shootId = uuidv4();
+        let theShoot = {
+          type: "shoot",
+          direction: this.type === "vessel" ? "ascendant" : "descendant",
+          id: shootId,
+          posX: this.posX + this.width / 2 + 1,
+          posY: this.type === "vessel" ? this.posY - 1 : this.posY + 3,
+          width: objectsSize["shoot"][0],
+          heigth: objectsSize["shoot"][1] - 1,
+          lp: 1,
+        };
+        this.sceneElements[shootId] = theShoot;
+        await addToSceneElements(theShoot);
+
+        this.shots.push(theShoot);
+        await this.redisClient.lPush("shots", JSON.stringify(theShoot));
+        this.client.send(
+          JSON.stringify({
+            messageType: "broadcast",
+            topic: "shootSomeone",
+            sessionId: this.sessionId,
+            senderId: this.id,
+            authorId: this.id,
+            type: "shoot",
+            content: theShoot,
+          }),
+        );
+        return theShoot;
       },
     };
-    process.stdin.on("data", (data) => {
+    process.stdin.on("data", async (data) => {
       const action = data.toString();
-      if (this.sceneElements.length === 0) {
+      this.sceneElements = this.getAllSceneElements();
+      if (Object.values(this.sceneElements).length === 0) {
         process.exit();
       } else if (action in actions) {
-        actions[action]();
-        //give a copy to the function
-        const scene = this.sceneElements.slice();
-        displayScene(scene);
+        let execData = actions[action]();
+        updateInSceneElements(this.id, {
+          id: this.id,
+          posX: this.posX,
+          posY: this.posY,
+          type: this.type,
+          lp: this.lp,
+          width: this.width,
+          heigth: this.heigth,
+          playerId: this.id,
+        });
+
         this.client.send(
           JSON.stringify({
             messageType: "broadcast",
@@ -149,71 +243,185 @@ class player {
             sessionId: this.sessionId,
             senderId: this.id,
             playerType: this.type,
-            content: {
-              playerId: this.id,
-              posX: this.posX,
-              posY: this.posY,
-              type: this.type,
-              lp: this.lp,
-              width: this.width,
-              heigth: this.heigth,
-            },
+            content: execData,
           }),
         );
       }
     });
   }
 
-  //listen to incoming message from the server/client and update the battle view
+  //listen to incoming message from the server and update the battle view
   //Display new frame for synchronisation
   updateBattleState() {
-    this.client.on("message", (message) => {
+    this.client.on("message", async (message) => {
       let msg = JSON.parse(message);
+      this.sceneElements = JSON.parse(
+        await this.redisClient.get("sceneElements"),
+      );
       if (msg.topic === "init") {
         this.sessionId = msg.content.ssId;
         this.type = msg.content.playerType;
         this.posX = msg.content.initPosX;
         this.posY = msg.content.initPosY;
         this.sceneElements = msg.content.gameState;
-        let self = this.sceneElements.find((obj) => obj.playerId === this.id);
+        const multi = this.redisClient.multi();
+        for (const [id, element] of Object.entries(msg.content.gameState)) {
+          multi.hSet("sceneElements", id, JSON.stringify(element));
+        }
+        await multi.exec();
+        let self = this.sceneElements[this.id];
         self.posX = this.posX;
         self.posY = this.posY;
       } else if (msg.topic === "stateUpdate") {
-        this.sceneElements = msg.content;
+        if (!validateGameObject(msg.content)) {
+          console.error("Invalid object received:", msg.content);
+          return;
+        }
+        this.sceneElements[msg.content.id] = msg.content;
+        await this.redisClient.hSet(
+          "sceneElements",
+          msg.content.id,
+          JSON.stringify(msg.content),
+        );
       } else if (msg.topic === "shootSomeone") {
-        this.sceneElements = msg.content;
+        // let shots = JSON.parse(await this.redisClient.get("shots"));
+        shots.push(msg.content);
+        await this.redisClient.lPush("shots", JSON.stringify(msg.content));
       } else if (msg.topic === "endGame") {
-        this.sceneElements = msg.content;
+        delete this.sceneElements[msg.senderId];
+        await this.redisClient.hDel("sceneElements", msg.senderId);
+      } else if (msg.topic === "uWereShot") {
+        this.lp = msg.content.lp;
       } else if (msg.topic === "destroyed") {
-        this.sceneElements = [];
+        this.sceneElements = ["destroyed"];
+        await this.redisClient.del("sceneElements");
+        await this.redisClient.del("shots");
       }
-      displayScene(this.sceneElements);
     });
   }
 
   endBattle() {
-    // this.client.send(
-    //   JSON.stringify({
-    //     messageType: "broadcast",
-    //     topic: "endGame",
-    //     sessionId: this.sessionId,
-    //     senderId: this.id,
-    //     playerType: this.type,
-    //     content: {},
-    //   }),
-    // );
-    //process.stdin.setRawMode(true);
-    // const endGame = figlet.textSync("Game Over", {
-    //   font: "Graffiti",
-    //   horizontalLayout: "default",
-    //   verticalLayout: "default",
-    //   width: 80,
-    //   whitespaceBreak: true,
-    // });
-    // console.log(endGame);
-    // console.log("Press escape key (esc) to go back to menu");
-    // process.exit();
+    const answer = displayScene(["exit"]);
+    if (answer === "y") {
+      this.client.send(
+        JSON.stringify({
+          messageType: "broadcast",
+          topic: "endGame",
+          sessionId: this.sessionId,
+          senderId: this.id,
+          playerType: this.type,
+          content: {},
+        }),
+      );
+      process.exit();
+    } else {
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+    }
+  }
+
+  async enventLoop() {
+    while (1) {
+      const shotsJson = await this.redisClient.lRange("shots", 0, -1);
+      const shots = shotsJson.map((shot) => JSON.parse(shot));
+      let sceneElements = await this.getAllSceneElements();
+
+      // Process shots
+      const shotsToRemove = [];
+      const elementsToUpdate = {};
+      const elementsToRemove = [];
+
+      shots.forEach(async (shot) => {
+        if (shot.direction === "ascendant" && shot.posY < 0) {
+          shotsToRemove.push(shot.id);
+          elementsToRemove.push(shot.id);
+        } else if (
+          shot.direction === "descendant" &&
+          shot.posY > screenYLimit
+        ) {
+          shotsToRemove.push(shot.id);
+          elementsToRemove.push(shot.id);
+        } else {
+          let target = Object.values(sceneElements).find((elmt) =>
+            hasCollide(elmt, shot),
+          );
+
+          if (target) {
+            target.lp -= 1;
+            if (target.lp === 0) {
+              delete sceneElements[target.playerId];
+              elementsToRemove.push(target.id);
+            } else {
+              elementsToUpdate[target.id] = { lp: target.lp };
+            }
+            shotsToRemove.push(shot.id);
+            elementsToRemove.push(shot.id);
+          } else {
+            shot.posY += shot.direction === "ascendant" ? -1 : 1;
+            elementsToUpdate[shot.id] = { posY: shot.posY };
+            sceneElements[shot.id].posY +=
+              shot.direction === "ascendant" ? -1 : 1;
+          }
+        }
+      });
+
+      // Apply all changes atomically
+      const multi = this.redisClient.multi();
+
+      // Remove shots and elements
+      shotsToRemove.forEach((shotId) => {
+        multi.lRem("shots", 0, JSON.stringify({ id: shotId }));
+      });
+
+      elementsToRemove.forEach((elementId) => {
+        multi.hDel("sceneElements", elementId);
+      });
+
+      // Update elements
+      for (const [elementId, updates] of Object.entries(elementsToUpdate)) {
+        const currentData = await this.redisClient.hGet(
+          "sceneElements",
+          elementId,
+        );
+        if (currentData) {
+          const element = JSON.parse(currentData);
+          const updatedElement = { ...element, ...updates };
+          multi.hSet(
+            "sceneElements",
+            elementId,
+            JSON.stringify(updatedElement),
+          );
+        }
+      }
+
+      await multi.exec();
+
+      sceneElements = await this.getAllSceneElements();
+      displayScene(sceneElements);
+      // await this.redisClient.set(
+      //   "sceneElements",
+      //   JSON.stringify(sceneElements),
+      // );
+      // await this.redisClient.set("shots", JSON.stringify(shots));
+      // sleep(17);
+    }
+  }
+
+  async getAllSceneElements() {
+    const allElements = await this.redisClient.hGetAll("sceneElements");
+    const sceneElements = {};
+
+    for (const [id, elementJson] of Object.entries(allElements)) {
+      sceneElements[id] = JSON.parse(elementJson);
+    }
+
+    return sceneElements;
   }
 }
 
-const player0 = new player();
+const redisClient = await createClient({
+  url: "redis://localhost:6380/0",
+})
+  .on("error", (err) => console.log("Redis Client Error", err))
+  .connect();
+const player0 = new player(redisClient);

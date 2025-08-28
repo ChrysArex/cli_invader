@@ -1,7 +1,7 @@
 import express from "express";
 import expressWs from "express-ws";
 import { objectsSize } from "./utils.js";
-import { hasCollide } from "./collision.js";
+//import { hasCollide } from "./collision.js";
 
 class GameServer {
   constructor(app) {
@@ -14,13 +14,25 @@ class GameServer {
     expressWs(this.server);
     this.server.get("/hello", (req, res) => res.send("hello my gee\n"));
     this.server.ws("/newGame", this.newGame.bind(this));
+    this.server.ws("/newShot", this.newShot.bind(this));
   }
   newGame(ws, req) {
-    //console.log(req.headers["playerid"]);
     this.initSession(ws, req.headers["playerid"]); //manage session for the new connection
     this.setUpListeners(ws, req.headers["playerid"]); //set liteners for the new connection
   }
 
+  newShot(ws, req) {
+    this.initShot(ws, req.headers["playerid"]);
+    this.setUpListeners(ws, req.headers["playerid"]);
+  }
+
+  initShot(ws, shootId) {
+    this.sessions[this.ssId]["connections"][shootId] = {
+      ws: ws,
+      playerId: shootId,
+      playerType: "shoot",
+    };
+  }
   initSession(ws, playerId) {
     this.typeIdx += 1;
     const playerTypeInfo =
@@ -93,9 +105,7 @@ class GameServer {
           playerType: playerTypeInfo[0],
           initPosX: playerTypeInfo[1],
           initPosY: playerTypeInfo[2],
-          gameState: Object.values(
-            this.sessions[this.ssId]["referenceGameState"],
-          ),
+          gameState: this.sessions[this.ssId]["referenceGameState"],
         },
       }),
     );
@@ -105,7 +115,7 @@ class GameServer {
         topic: "stateUpdate",
         sessionId: this.ssId,
         senderId: playerId,
-        content: Object.values(this.sessions[this.ssId]["referenceGameState"]),
+        content: this.sessions[this.ssId]["referenceGameState"][playerId],
       }),
       Object.values(this.sessions[this.ssId]["connections"]),
     );
@@ -117,13 +127,15 @@ class GameServer {
     ws.on("message", (msg) => {
       const msgObj = JSON.parse(msg);
       if (msgObj.topic === "stateUpdate") {
-        this.sessions[msgObj.sessionId]["referenceGameState"][msgObj.senderId] =
-          msgObj.content;
+        this.sessions[msgObj.sessionId]["referenceGameState"][
+          msgObj.content.id
+        ] = msgObj.content;
       } else if (msgObj.topic === "shootSomeone") {
         //perform a verification of the shoot and a reference update
         //hasCollide(shift, obj1, obj2);
-        this.sessions[msgObj.sessionId]["referenceGameState"][msgObj.senderId] =
-          msgObj.content;
+        this.sessions[msgObj.sessionId]["referenceGameState"][
+          msgObj.content.id
+        ] = msgObj.content;
         msgObj.topic = "shootSomeone";
       } else if (msgObj.topic === "endGame") {
         //Perform necessary verification to ensure the player has been destroyed
@@ -171,16 +183,27 @@ class GameServer {
               this.sessions[msgObj.sessionId]["referenceGameState"][
                 msgObj.target.playerId
               ] = msgObj.target;
+              this.sessions[msgObj.sessionId]["connections"][
+                msgObj.target.playerId
+              ].ws.send(
+                JSON.stringify({
+                  messageType: "unique",
+                  topic: "uWereShot",
+                  sessionId: this.ssId,
+                  senderId: null,
+                  content: msgObj.target,
+                }),
+              );
             }
           }
         }
       }
 
-      if (msgObj.authorId) msgObj.senderId = msgObj.authorId;
+      // if (msgObj.authorId) msgObj.senderId = msgObj.authorId;
 
-      msgObj.content = Object.values(
-        this.sessions[msgObj.sessionId]["referenceGameState"],
-      );
+      // msgObj.content = Object.values(
+      //   this.sessions[msgObj.sessionId]["referenceGameState"],
+      // );
 
       this.broadcast(
         JSON.stringify(msgObj),

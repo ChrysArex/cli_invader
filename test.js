@@ -1,20 +1,15 @@
-import figlet from "figlet";
-import { confirm } from "@inquirer/prompts";
+import { fork } from "node:child_process";
 
-const endGame = figlet.textSync("Do you really want to leave the party ?", {
-  font: "Graffiti",
-  horizontalLayout: "default",
-  verticalLayout: "default",
-  width: 80,
-  whitespaceBreak: true,
+const child = fork("child.js", {
+  detached: true,
 });
-const answer = await confirm({ message: endGame });
-console.log(answer);
-if (answer) {
-  const d = "test";
-  const stats = `You have been killed by: ${d} \nkills: ${d} \nshots: ${d} \ndammages: ${d} \n`;
+child.unref();
+child.send("ping");
 
-  console.log(stats);
-}
-
-console.log("Press any key to exit");
+child.on("message", (ack) => {
+  if (ack === "YCE") {
+    console.log("imma getting outta here, peace out man!!!");
+    child.send("Hey buddy, here is your Faaaaaaather");
+    process.exit();
+  }
+});

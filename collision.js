@@ -1,6 +1,6 @@
 //This function check if obj1 and obj2 collide
-//Return True if they collide, False otherwwise
-export function hasCollide(shift, obj1, obj2) {
+//Return True if they collide, False otherwise
+export function hasCollide(obj1, obj2) {
   const middleReference = obj2.posX + obj2.width / 2;
   const test = {
     opponent:
