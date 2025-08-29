@@ -89,13 +89,6 @@ export function displayScene(GS) {
 
   //First we cut out multi-line element in sub-object
   for (let i = 0; i < sceneElements.length; i += 1) {
-    console.log("sceneElements[i]:", sceneElements[i]);
-    console.log("sceneElements[i].type:", sceneElements[i].type);
-    console.log("objectsSize keys:", Object.keys(objectsSize));
-    console.log(
-      "objectsSize[sceneElements[i].type]:",
-      objectsSize[sceneElements[i].type],
-    );
     let chunckNumber = objectsSize[sceneElements[i].type][1];
     if (chunckNumber > 1) {
       for (let j = 0; j < chunckNumber; j++) {

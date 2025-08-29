@@ -9,9 +9,7 @@ import {
   screenYLimit,
   objectsSize,
   validateGameObject,
-  addToSceneElements,
   removeFromSceneElements,
-  updateInSceneElements,
   sleep,
 } from "../utils.js";
 import { console } from "node:inspector/promises";
@@ -46,8 +44,8 @@ class player {
     //the redis client connection
     this.redisClient = redisClient;
 
-    this.redisClient.del("sceneElements");
-    this.redisClient.del("shots");
+    // this.redisClient.del("sceneElements");
+    // this.redisClient.del("shots");
 
     //List of all the element present in a frame
     this.sceneElements = {};
@@ -67,7 +65,7 @@ class player {
     );
     //List of all the shoot in the game
     // this.shots = [];
-    // this.redisClient.set("shots", JSON.stringify(this.shots));
+    // this.redisClient.lPush("shots", JSON.stringify(this.shots));
 
     //the actual connection
     this.client = new WebSocket("ws://localhost:3000/newGame", {
@@ -200,9 +198,9 @@ class player {
           lp: 1,
         };
         this.sceneElements[shootId] = theShoot;
-        await addToSceneElements(theShoot);
+        await this.addToSceneElements(theShoot);
 
-        this.shots.push(theShoot);
+        //this.shots.push(theShoot);
         await this.redisClient.lPush("shots", JSON.stringify(theShoot));
         this.client.send(
           JSON.stringify({
@@ -220,12 +218,12 @@ class player {
     };
     process.stdin.on("data", async (data) => {
       const action = data.toString();
-      this.sceneElements = this.getAllSceneElements();
+      this.sceneElements = await this.getAllSceneElements();
       if (Object.values(this.sceneElements).length === 0) {
         process.exit();
       } else if (action in actions) {
         let execData = actions[action]();
-        updateInSceneElements(this.id, {
+        await this.updateInSceneElements(this.id, {
           id: this.id,
           posX: this.posX,
           posY: this.posY,
@@ -255,9 +253,7 @@ class player {
   updateBattleState() {
     this.client.on("message", async (message) => {
       let msg = JSON.parse(message);
-      this.sceneElements = JSON.parse(
-        await this.redisClient.get("sceneElements"),
-      );
+      this.sceneElements = await this.getAllSceneElements();
       if (msg.topic === "init") {
         this.sessionId = msg.content.ssId;
         this.type = msg.content.playerType;
@@ -285,7 +281,7 @@ class player {
         );
       } else if (msg.topic === "shootSomeone") {
         // let shots = JSON.parse(await this.redisClient.get("shots"));
-        shots.push(msg.content);
+        //shots.push(msg.content);
         await this.redisClient.lPush("shots", JSON.stringify(msg.content));
       } else if (msg.topic === "endGame") {
         delete this.sceneElements[msg.senderId];
@@ -323,7 +319,9 @@ class player {
   async enventLoop() {
     while (1) {
       const shotsJson = await this.redisClient.lRange("shots", 0, -1);
+
       const shots = shotsJson.map((shot) => JSON.parse(shot));
+
       let sceneElements = await this.getAllSceneElements();
 
       // Process shots
@@ -403,7 +401,7 @@ class player {
       //   JSON.stringify(sceneElements),
       // );
       // await this.redisClient.set("shots", JSON.stringify(shots));
-      // sleep(17);
+      sleep(17);
     }
   }
 
@@ -417,6 +415,27 @@ class player {
 
     return sceneElements;
   }
+
+  async updateInSceneElements(elementId, updates) {
+    const currentData = await this.redisClient.hGet("sceneElements", elementId);
+    if (currentData) {
+      const element = JSON.parse(currentData);
+      const updatedElement = { ...element, ...updates };
+      await this.redisClient.hSet(
+        "sceneElements",
+        elementId,
+        JSON.stringify(updatedElement),
+      );
+    }
+  }
+
+  async addToSceneElements(newElement) {
+    await this.redisClient.hSet(
+      "sceneElements",
+      newElement.id,
+      JSON.stringify(newElement),
+    );
+  }
 }
 
 const redisClient = await createClient({
@@ -424,4 +443,6 @@ const redisClient = await createClient({
 })
   .on("error", (err) => console.log("Redis Client Error", err))
   .connect();
+redisClient.del("sceneElements");
+redisClient.del("shots");
 const player0 = new player(redisClient);
