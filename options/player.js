@@ -326,16 +326,17 @@ class player {
 
       // Process shots
       const shotsToRemove = [];
+      const shotsToUpdate = {};
       const elementsToUpdate = {};
       const elementsToRemove = [];
 
-      shots.forEach(async (shot) => {
-        if (shot.direction === "ascendant" && shot.posY < 0) {
+      shots.forEach(async (shot, index) => {
+        if (shot.direction === "ascendant" && shot.posY <= 0) {
           shotsToRemove.push(shot.id);
           elementsToRemove.push(shot.id);
         } else if (
           shot.direction === "descendant" &&
-          shot.posY > screenYLimit
+          shot.posY >= screenYLimit
         ) {
           shotsToRemove.push(shot.id);
           elementsToRemove.push(shot.id);
@@ -348,8 +349,11 @@ class player {
             target.lp -= 1;
             if (target.lp === 0) {
               delete sceneElements[target.playerId];
+              //TO-DO: Send a message or find a way to make the
+              // server and everyone know that Someone has been destroyed
               elementsToRemove.push(target.id);
             } else {
+              sceneElements[target.playerId].lp = target.lp;
               elementsToUpdate[target.id] = { lp: target.lp };
             }
             shotsToRemove.push(shot.id);
@@ -357,6 +361,7 @@ class player {
           } else {
             shot.posY += shot.direction === "ascendant" ? -1 : 1;
             elementsToUpdate[shot.id] = { posY: shot.posY };
+            shotsToUpdate[index] = { ...shot, ...{ posY: shot.posY } };
             sceneElements[shot.id].posY +=
               shot.direction === "ascendant" ? -1 : 1;
           }
@@ -366,14 +371,20 @@ class player {
       // Apply all changes atomically
       const multi = this.redisClient.multi();
 
-      // Remove shots and elements
+      // Remove shots
       shotsToRemove.forEach((shotId) => {
         multi.lRem("shots", 0, JSON.stringify({ id: shotId }));
       });
 
+      // Remove elements
       elementsToRemove.forEach((elementId) => {
         multi.hDel("sceneElements", elementId);
       });
+
+      //Update shots
+      for (const [index, update] of Object.entries(shotsToUpdate)) {
+        multi.lSet("shots", parseInt(index), JSON.stringify(update));
+      }
 
       // Update elements
       for (const [elementId, updates] of Object.entries(elementsToUpdate)) {
@@ -396,12 +407,7 @@ class player {
 
       sceneElements = await this.getAllSceneElements();
       displayScene(sceneElements);
-      // await this.redisClient.set(
-      //   "sceneElements",
-      //   JSON.stringify(sceneElements),
-      // );
-      // await this.redisClient.set("shots", JSON.stringify(shots));
-      sleep(17);
+      await sleep(27);
     }
   }
 
