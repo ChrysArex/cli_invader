@@ -10,6 +10,8 @@ export function hasCollide(obj1, obj2) {
     vessel:
       obj1.posY + obj1.heigth === obj2.posY &&
       (obj1.posX + obj1.width < middleReference || obj1.posX > middleReference),
+
+    shoot: false,
   };
 
   if (

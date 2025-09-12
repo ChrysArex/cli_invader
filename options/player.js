@@ -200,8 +200,7 @@ class player {
         this.sceneElements[shootId] = theShoot;
         await this.addToSceneElements(theShoot);
 
-        //this.shots.push(theShoot);
-        await this.redisClient.lPush("shots", JSON.stringify(theShoot));
+        await this.redisClient.lPush("shots", shootId);
         this.client.send(
           JSON.stringify({
             messageType: "broadcast",
@@ -223,16 +222,20 @@ class player {
         process.exit();
       } else if (action in actions) {
         let execData = actions[action]();
-        await this.updateInSceneElements(this.id, {
-          id: this.id,
-          posX: this.posX,
-          posY: this.posY,
-          type: this.type,
-          lp: this.lp,
-          width: this.width,
-          heigth: this.heigth,
-          playerId: this.id,
-        });
+        await this.redisClient.hSet(
+          "sceneElements",
+          this.id,
+          JSON.stringify({
+            id: this.id,
+            posX: this.posX,
+            posY: this.posY,
+            type: this.type,
+            lp: this.lp,
+            width: this.width,
+            heigth: this.heigth,
+            playerId: this.id,
+          }),
+        );
 
         this.client.send(
           JSON.stringify({
@@ -282,7 +285,8 @@ class player {
       } else if (msg.topic === "shootSomeone") {
         // let shots = JSON.parse(await this.redisClient.get("shots"));
         //shots.push(msg.content);
-        await this.redisClient.lPush("shots", JSON.stringify(msg.content));
+        await this.addToSceneElements(msg.content);
+        await this.redisClient.lPush("shots", msg.content.id);
       } else if (msg.topic === "endGame") {
         delete this.sceneElements[msg.senderId];
         await this.redisClient.hDel("sceneElements", msg.senderId);
@@ -318,9 +322,7 @@ class player {
 
   async enventLoop() {
     while (1) {
-      const shotsJson = await this.redisClient.lRange("shots", 0, -1);
-
-      const shots = shotsJson.map((shot) => JSON.parse(shot));
+      const shots = await this.redisClient.lRange("shots", 0, -1);
 
       let sceneElements = await this.getAllSceneElements();
 
@@ -330,16 +332,17 @@ class player {
       const elementsToUpdate = {};
       const elementsToRemove = [];
 
-      shots.forEach(async (shot, index) => {
+      shots.forEach((shootId, index) => {
+        const shot = sceneElements[shootId];
         if (shot.direction === "ascendant" && shot.posY <= 0) {
-          shotsToRemove.push(shot.id);
-          elementsToRemove.push(shot.id);
+          shotsToRemove.push(shootId);
+          elementsToRemove.push(shootId);
         } else if (
           shot.direction === "descendant" &&
           shot.posY >= screenYLimit
         ) {
-          shotsToRemove.push(shot.id);
-          elementsToRemove.push(shot.id);
+          shotsToRemove.push(shootId);
+          elementsToRemove.push(shootId);
         } else {
           let target = Object.values(sceneElements).find((elmt) =>
             hasCollide(elmt, shot),
@@ -348,43 +351,28 @@ class player {
           if (target) {
             target.lp -= 1;
             if (target.lp === 0) {
-              delete sceneElements[target.playerId];
-              //TO-DO: Send a message or find a way to make the
-              // server and everyone know that Someone has been destroyed
               elementsToRemove.push(target.id);
+              //TO-DO: Send a message or find a way to make the
+              // server and everyone know that someone has been destroyed
             } else {
-              sceneElements[target.playerId].lp = target.lp;
               elementsToUpdate[target.id] = { lp: target.lp };
             }
-            shotsToRemove.push(shot.id);
-            elementsToRemove.push(shot.id);
-          } else {
-            shot.posY += shot.direction === "ascendant" ? -1 : 1;
-            elementsToUpdate[shot.id] = { posY: shot.posY };
-            shotsToUpdate[index] = { ...shot, ...{ posY: shot.posY } };
-            sceneElements[shot.id].posY +=
-              shot.direction === "ascendant" ? -1 : 1;
+            shotsToRemove.push(shootId);
+            elementsToRemove.push(shootId);
           }
+          shot.posY += shot.direction === "ascendant" ? -1 : 1;
+          elementsToUpdate[shot.id] = { posY: shot.posY };
+          shotsToUpdate[index] = { ...shot, ...{ posY: shot.posY } };
         }
       });
 
       // Apply all changes atomically
       const multi = this.redisClient.multi();
 
-      // Remove shots
-      shotsToRemove.forEach((shotId) => {
-        multi.lRem("shots", 0, JSON.stringify({ id: shotId }));
-      });
-
-      // Remove elements
-      elementsToRemove.forEach((elementId) => {
-        multi.hDel("sceneElements", elementId);
-      });
-
       //Update shots
-      for (const [index, update] of Object.entries(shotsToUpdate)) {
-        multi.lSet("shots", parseInt(index), JSON.stringify(update));
-      }
+      // for (const [index, update] of Object.entries(shotsToUpdate)) {
+      //   multi.lSet("shots", parseInt(index), JSON.stringify(update));
+      // }
 
       // Update elements
       for (const [elementId, updates] of Object.entries(elementsToUpdate)) {
@@ -402,6 +390,16 @@ class player {
           );
         }
       }
+
+      // Remove shots
+      shotsToRemove.forEach((shootId) => {
+        multi.lRem("shots", 0, shootId);
+      });
+
+      // Remove elements
+      elementsToRemove.forEach((elementId) => {
+        multi.hDel("sceneElements", elementId);
+      });
 
       await multi.exec();
 

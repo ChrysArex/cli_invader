@@ -62,6 +62,7 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
 // This function is responsible to render a consistent representation of the game state across all players (Frame)
 export function displayScene(GS) {
   let gameState = Object.values(GS).slice();
+  //console.log(gameState);
   if (gameState.length === 1 && gameState[0] === "exit") {
     console.clear();
     const answer = question("Do you really want to leave the party ? (y/n)");
