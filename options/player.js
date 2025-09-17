@@ -17,13 +17,13 @@ import { createClient } from "redis";
 import { log } from "node:console";
 
 class player {
-  constructor(redisClient, type = "vessel") {
+  constructor(redisClient, wsClient, id, type = "vessel") {
     process.stdin.setRawMode(true);
     process.stdin.resume();
     process.stdout.write("\x1B[?25l");
 
     //player's ID
-    this.id = uuidv4();
+    this.id = id;
 
     //Id of the session the user is in
     this.sessionId = null;
@@ -63,15 +63,9 @@ class player {
         playerId: this.id,
       }),
     );
-    //List of all the shoot in the game
-    // this.shots = [];
-    // this.redisClient.lPush("shots", JSON.stringify(this.shots));
 
     //the actual connection
-    this.client = new WebSocket("ws://localhost:3000/newGame", {
-      headers: { playerid: this.id },
-    });
-    this.client.on("error", console.error);
+    this.client = wsClient;
 
     //listennes for incoming messages from server and player
     this.updateBattleState();
@@ -237,16 +231,18 @@ class player {
           }),
         );
 
-        this.client.send(
-          JSON.stringify({
-            messageType: "broadcast",
-            topic: "stateUpdate",
-            sessionId: this.sessionId,
-            senderId: this.id,
-            playerType: this.type,
-            content: execData,
-          }),
-        );
+        if (action !== "\x1B") {
+          this.client.send(
+            JSON.stringify({
+              messageType: "broadcast",
+              topic: "stateUpdate",
+              sessionId: this.sessionId,
+              senderId: this.id,
+              playerType: this.type,
+              content: execData,
+            }),
+          );
+        }
       }
     });
   }
@@ -313,6 +309,8 @@ class player {
           content: {},
         }),
       );
+      this.redisClient.del("sceneElements");
+      this.redisClient.del("shots");
       process.exit();
     } else {
       process.stdin.setRawMode(true);
@@ -361,18 +359,24 @@ class player {
             elementsToRemove.push(shootId);
           }
           shot.posY += shot.direction === "ascendant" ? -1 : 1;
-          elementsToUpdate[shot.id] = { posY: shot.posY };
-          shotsToUpdate[index] = { ...shot, ...{ posY: shot.posY } };
+          elementsToUpdate[shootId] = { posY: shot.posY };
         }
       });
 
+      //Remove shot in the server
+      this.client.send(
+        JSON.stringify({
+          messageType: "broadcast",
+          topic: "removeShot",
+          sessionId: this.sessionId,
+          senderId: this.id,
+          playerType: this.type,
+          content: shotsToRemove,
+        }),
+      );
+
       // Apply all changes atomically
       const multi = this.redisClient.multi();
-
-      //Update shots
-      // for (const [index, update] of Object.entries(shotsToUpdate)) {
-      //   multi.lSet("shots", parseInt(index), JSON.stringify(update));
-      // }
 
       // Update elements
       for (const [elementId, updates] of Object.entries(elementsToUpdate)) {
@@ -394,11 +398,7 @@ class player {
       // Remove shots
       shotsToRemove.forEach((shootId) => {
         multi.lRem("shots", 0, shootId);
-      });
-
-      // Remove elements
-      elementsToRemove.forEach((elementId) => {
-        multi.hDel("sceneElements", elementId);
+        multi.hDel("sceneElements", shootId);
       });
 
       await multi.exec();
@@ -442,6 +442,10 @@ class player {
   }
 }
 
+//Player's ID
+const id = uuidv4();
+
+//Player's redis connection
 const redisClient = await createClient({
   url: "redis://localhost:6380/0",
 })
@@ -449,4 +453,13 @@ const redisClient = await createClient({
   .connect();
 redisClient.del("sceneElements");
 redisClient.del("shots");
-const player0 = new player(redisClient);
+
+//Player's WebSocket connection
+const wsClient = new WebSocket("ws://localhost:3000/newGame", {
+  headers: { playerid: id },
+});
+wsClient.on("error", console.error);
+
+wsClient.on("open", () => {
+  const player0 = new player(redisClient, wsClient, id);
+});

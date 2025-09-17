@@ -14,7 +14,6 @@ class GameServer {
     expressWs(this.server);
     this.server.get("/hello", (req, res) => res.send("hello my gee\n"));
     this.server.ws("/newGame", this.newGame.bind(this));
-    this.server.ws("/newShot", this.newShot.bind(this));
   }
   newGame(ws, req) {
     this.initSession(ws, req.headers["playerid"]); //manage session for the new connection
@@ -109,6 +108,7 @@ class GameServer {
         },
       }),
     );
+
     this.broadcast(
       JSON.stringify({
         messageType: "broadcast",
@@ -133,6 +133,10 @@ class GameServer {
       } else if (msgObj.topic === "shootSomeone") {
         //perform a verification of the shoot and a reference update
         //hasCollide(shift, obj1, obj2);
+        delete this.sessions[msgObj.sessionId]["referenceGameState"][
+          "undefined"
+        ];
+        console.log(this.sessions[this.ssId]["referenceGameState"]);
         this.sessions[msgObj.sessionId]["referenceGameState"][
           msgObj.content.id
         ] = msgObj.content;
@@ -145,8 +149,7 @@ class GameServer {
           msgObj.senderId
         ];
         delete this.sessions[msgObj.sessionId]["connections"][msgObj.senderId];
-        if (msgObj.playerType === "vessel" || msgObj.playerType === "opponent")
-          this.sessions[msgObj.sessionId]["clientCount"] -= 1;
+        this.sessions[msgObj.sessionId]["clientCount"] -= 1;
         if (msgObj.target) {
           if (
             msgObj.target.lp === 0 &&
@@ -197,6 +200,10 @@ class GameServer {
             }
           }
         }
+      } else if (msgObj.topic === "removeShot") {
+        msgObj.content.forEach((shootId) => {
+          delete this.sessions[msgObj.sessionId]["referenceGameState"][shootId];
+        });
       }
 
       // if (msgObj.authorId) msgObj.senderId = msgObj.authorId;
@@ -219,19 +226,21 @@ class GameServer {
 
   broadcast(message, players) {
     const msgObj = JSON.parse(message);
-    players.forEach((player) => {
-      if (
-        msgObj.messageType === "broadcast" &&
-        player["playerId"] !== msgObj.senderId
-      )
-        player.ws.send(message);
-      else if (
-        player["playerId"] !== msgObj.senderId &&
-        player.playerType === msgObj.playerType
-      ) {
-        player.ws.send(message);
-      }
-    });
+    if (msgObj.messageType === "broadcast") {
+      players.forEach((player) => {
+        if (
+          msgObj.messageType === "broadcast" &&
+          player["playerId"] !== msgObj.senderId
+        )
+          player.ws.send(message);
+        else if (
+          player["playerId"] !== msgObj.senderId &&
+          player.playerType === msgObj.playerType
+        ) {
+          player.ws.send(message);
+        }
+      });
+    }
   }
 
   listen(port, callback) {
