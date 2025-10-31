@@ -1,13 +1,15 @@
 import express from "express";
 import expressWs from "express-ws";
 import { objectsSize } from "./utils.js";
+import { v4 as uuidv4 } from "uuid";
+import { createClient } from "redis";
 //import { hasCollide } from "./collision.js";
 
 class GameServer {
-  constructor(app) {
-    this.sessions = { init: 0 };
-    this.ssId = "init";
-    this.server = app ? app : express();
+  constructor(redisClient) {
+    this.connections = {};
+    this.redisClient = redisClient;
+    this.server = express();
     this.typeIdx = -1;
     this.vesselPosXRef = 2;
     this.opponentPosXRef = 2;
@@ -20,91 +22,78 @@ class GameServer {
     this.setUpListeners(ws, req.headers["playerid"]); //set liteners for the new connection
   }
 
-  newShot(ws, req) {
-    this.initShot(ws, req.headers["playerid"]);
-    this.setUpListeners(ws, req.headers["playerid"]);
-  }
+  async initSession(ws, playerId) {
+    // create/find out a session for the new player
+    let playerSession = await this.redisClient.get("availableSession");
+    if (!playerSession) {
+      const ssId = uuidv4();
+      await this.redisClient.set("availableSession", ssId);
+      await this.redisClient.set("swich", 0);
+      await this.redisClient.set("posXRef", 1);
+      playerSession = ssId;
+      this.connections[playerSession] = [];
+      console.log(`new sessions created, sessions id: ${ssId}`);
+    }
+    await this.redisClient.sAdd(`session:${playerSession}:GS`, playerId);
+    await this.redisClient.sAdd(
+      `session:${playerSession}:connections`,
+      playerId,
+    );
+    const conCount = await this.redisClient.sCard(
+      `session:${playerSession}:connections`,
+    );
+    if (conCount === 6) await this.redisClient.del("availableSession");
 
-  initShot(ws, shootId) {
-    this.sessions[this.ssId]["connections"][shootId] = {
-      ws: ws,
-      playerId: shootId,
-      playerType: "shoot",
+    //Increment and get the swich variable
+    await this.redisClient.incr("swich");
+    const swich = await this.redisClient.get("swich");
+    const posXRef = await this.redisClient.get("posXRef");
+
+    // Set up user's data and Store it
+    const newPlayer = {
+      playerId: playerId,
+      type: swich % 2 === 0 ? "opponent" : "vessel",
+      lp: 100,
     };
-  }
-  initSession(ws, playerId) {
-    this.typeIdx += 1;
-    const playerTypeInfo =
-      this.typeIdx % 2 === 0
-        ? ["vessel", this.vesselPosXRef, 5]
-        : ["opponent", this.opponentPosXRef, 0];
 
-    if (
-      Object.keys(this.sessions).length !== 0 &&
-      this.sessions[this.ssId].clientCount <= 6
-    ) {
-      this.sessions[this.ssId]["connections"][playerId] = {
-        ws: ws,
-        playerId: playerId,
-        playerType: playerTypeInfo[0],
-      };
-      this.sessions[this.ssId]["referenceGameState"][playerId] = {
-        playerId: playerId,
-        posX: playerTypeInfo[1],
-        posY: playerTypeInfo[2],
-        type: playerTypeInfo[0],
-        lp: 100,
-        width: objectsSize[playerTypeInfo[0]][0],
-        heigth: objectsSize[playerTypeInfo[0]][1],
-      };
-      this.sessions[this.ssId]["clientCount"] += 1;
-      console.log(
-        `new player added, the sessions so far: ${this.sessions[this.ssId]["referenceGameState"]}`,
+    newPlayer.posX = posXRef;
+    newPlayer.type === "vessel" ? (newPlayer.posY = 5) : (newPlayer.posY = 0);
+    newPlayer.width = objectsSize[newPlayer.type][0];
+    newPlayer.heigth = objectsSize[newPlayer.type][1];
+
+    await this.redisClient.set(`player:${playerId}`, JSON.stringify(newPlayer));
+
+    // Set up and store connection's data
+    const newConnection = {
+      ws: ws,
+      playerId: playerId,
+      playerType: swich % 2 === 0 ? "opponent" : "vessel",
+    };
+
+    this.connections[playerSession].push(newConnection);
+
+    // complete variable updates
+    if (swich % 2 === 0 && swich >= 2) {
+      await this.redisClient.set(
+        "posXRef",
+        posXRef + objectsSize[newPlayer.type][0] + 1,
       );
-    } else {
-      this.vesselPosXRef = 2;
-      this.opponentPosXRef = 2;
-
-      this.ssId = crypto.randomUUID();
-      this.sessions[this.ssId] = {
-        referenceGameState: {},
-        connections: {},
-        clientCount: 0,
-      };
-
-      this.sessions[this.ssId]["referenceGameState"][playerId] = {
-        playerId: playerId,
-        posX: playerTypeInfo[1],
-        posY: playerTypeInfo[2],
-        type: playerTypeInfo[0],
-        lp: 100,
-        width: objectsSize[playerTypeInfo[0]][0],
-        heigth: objectsSize[playerTypeInfo[0]][1],
-      };
-
-      this.sessions[this.ssId]["connections"][playerId] = {
-        ws: ws,
-        playerId: playerId,
-        playerType: playerTypeInfo[0],
-      };
-
-      this.sessions[this.ssId]["clientCount"] += 1;
-
-      console.log(`new sessions created, sessions id: ${this.ssId}`);
     }
 
+    // Send update message to players
+    const GS = this.getGameState(playerSession);
     ws.send(
       JSON.stringify({
         messageType: "unique",
         topic: "init",
-        sessionId: this.ssId,
+        sessionId: playerSession,
         senderId: null,
         content: {
-          ssId: this.ssId,
-          playerType: playerTypeInfo[0],
-          initPosX: playerTypeInfo[1],
-          initPosY: playerTypeInfo[2],
-          gameState: this.sessions[this.ssId]["referenceGameState"],
+          ssId: playerSession,
+          playerType: newPlayer.type,
+          initPosX: newPlayer.posX,
+          initPosY: newPlayer.posY,
+          gameState: GS,
         },
       }),
     );
@@ -113,14 +102,12 @@ class GameServer {
       JSON.stringify({
         messageType: "broadcast",
         topic: "stateUpdate",
-        sessionId: this.ssId,
+        sessionId: playerSession,
         senderId: playerId,
-        content: this.sessions[this.ssId]["referenceGameState"][playerId],
+        content: newPlayer,
       }),
-      Object.values(this.sessions[this.ssId]["connections"]),
+      this.connections[playerSession],
     );
-    this.vesselPosXRef += objectsSize["vessel"][0] + 1;
-    this.opponentPosXRef += objectsSize["opponent"][0] + 1;
   }
 
   setUpListeners(ws, playerId) {
@@ -206,12 +193,6 @@ class GameServer {
         });
       }
 
-      // if (msgObj.authorId) msgObj.senderId = msgObj.authorId;
-
-      // msgObj.content = Object.values(
-      //   this.sessions[msgObj.sessionId]["referenceGameState"],
-      // );
-
       this.broadcast(
         JSON.stringify(msgObj),
         Object.values(this.sessions[msgObj.sessionId]["connections"]),
@@ -246,7 +227,43 @@ class GameServer {
   listen(port, callback) {
     this.server.listen(port, callback);
   }
+
+  async getGameState(ssId) {
+    const ssElemts = await this.redisClient.sMembers(`session:${ssId}:GS`);
+    const multi = this.redisClient.multi();
+    const GameState = {};
+    ssElemts.forEach((objId) => multi.get(`player:${objId}`));
+    const results = await multi.exec();
+    ssElemts.forEach((objId, index) => {
+      GameState[objId] = JSON.parse(results[index]);
+    });
+    return GameState;
+  }
+
+  // async getConnections(ssId) {
+  //   const ssElemts = await this.redisClient.sMembers(
+  //     `session:${ssId}:connections`,
+  //   );
+  //   const multi = this.redisClient.multi();
+  //   const connections = [];
+  //   ssElemts.forEach((playerId) => multi.get(`connection:${playerId}`));
+  //   const results = await multi.exec();
+  //   results.map(([error, data]) => {
+  //     connections[data.playerId] = JSON.parse(data);
+  //   });
+  //   return connections;
+  // }
 }
 
-const server = new GameServer();
+//Server's redis connection
+const redisClient = await createClient({
+  url: "redis://localhost:6380/0",
+})
+  .on("error", (err) => console.log("Redis Client Error", err))
+  .connect();
+redisClient.del("sceneElements");
+redisClient.del("shots");
+
+//Launch new server instance
+const server = new GameServer(redisClient);
 server.listen(3000, () => console.log("Server is listenning"));
