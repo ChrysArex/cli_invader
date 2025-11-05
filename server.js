@@ -7,6 +7,7 @@ import { createClient } from "redis";
 
 class GameServer {
   constructor(redisClient) {
+    //Store the connection objects of the connected clients
     this.connections = {};
     this.redisClient = redisClient;
     this.server = express();
@@ -18,7 +19,7 @@ class GameServer {
     this.server.ws("/newGame", this.newGame.bind(this));
   }
   newGame(ws, req) {
-    this.initSession(ws, req.headers["playerid"]); //manage session for the new connection
+    this.initSession(ws, req.headers["playerid"]); // manage session for the new connection
     this.setUpListeners(ws, req.headers["playerid"]); //set liteners for the new connection
   }
 
@@ -29,7 +30,7 @@ class GameServer {
       const ssId = uuidv4();
       await this.redisClient.set("availableSession", ssId);
       await this.redisClient.set("swich", 0);
-      await this.redisClient.set("posXRef", 1);
+      await this.redisClient.set("posXRef", 2);
       playerSession = ssId;
       this.connections[playerSession] = [];
       console.log(`new sessions created, sessions id: ${ssId}`);
@@ -47,7 +48,7 @@ class GameServer {
     //Increment and get the swich variable
     await this.redisClient.incr("swich");
     const swich = await this.redisClient.get("swich");
-    const posXRef = await this.redisClient.get("posXRef");
+    const posXRef = parseInt(await this.redisClient.get("posXRef"));
 
     // Set up user's data and Store it
     const newPlayer = {
@@ -61,7 +62,11 @@ class GameServer {
     newPlayer.width = objectsSize[newPlayer.type][0];
     newPlayer.heigth = objectsSize[newPlayer.type][1];
 
-    await this.redisClient.set(`player:${playerId}`, JSON.stringify(newPlayer));
+    await this.redisClient.hSet(
+      `session:${playerSession}:players`,
+      playerId,
+      JSON.stringify(newPlayer),
+    );
 
     // Set up and store connection's data
     const newConnection = {
@@ -80,8 +85,10 @@ class GameServer {
       );
     }
 
-    // Send update message to players
-    const GS = this.getGameState(playerSession);
+    // Send initialisation message to player
+    const GS = await this.redisClient.hGetAll(
+      `session:${playerSession}:players`,
+    );
     ws.send(
       JSON.stringify({
         messageType: "unique",
@@ -97,7 +104,7 @@ class GameServer {
         },
       }),
     );
-
+    // Send update message to other players
     this.broadcast(
       JSON.stringify({
         messageType: "broadcast",
@@ -111,12 +118,15 @@ class GameServer {
   }
 
   setUpListeners(ws, playerId) {
-    ws.on("message", (msg) => {
+    ws.on("message", async (msg) => {
       const msgObj = JSON.parse(msg);
       if (msgObj.topic === "stateUpdate") {
-        this.sessions[msgObj.sessionId]["referenceGameState"][
-          msgObj.content.id
-        ] = msgObj.content;
+        //Update the player's data inside the DB
+        await this.redisClient.hSet(
+          `session:${msgObj.sessionId}:players`,
+          msgObj.content.playerId,
+          JSON.stringify(msgObj.content),
+        );
       } else if (msgObj.topic === "shootSomeone") {
         //perform a verification of the shoot and a reference update
         //hasCollide(shift, obj1, obj2);
@@ -193,15 +203,23 @@ class GameServer {
         });
       }
 
-      this.broadcast(
-        JSON.stringify(msgObj),
-        Object.values(this.sessions[msgObj.sessionId]["connections"]),
-      );
+      this.broadcast(msg, this.connections[msgObj.sessionId]);
       console.log("Message broadcasted");
     });
 
-    ws.on("close", () => {
-      console.log(`Player ${playerId} disconnected`);
+    ws.on("close", async (ssId) => {
+      // this.connections[ssId];
+      await this.redisClient.hDel(`session:${ssId}:players`, playerId);
+      this.broadcast(
+        JSON.stringify({
+          messageType: "broadcast",
+          topic: "info",
+          sessionId: ssId,
+          senderId: null,
+          content: `Player ${playerId} logged out`,
+        }),
+        this.connections[ssId],
+      );
     });
   }
 
@@ -227,18 +245,17 @@ class GameServer {
   listen(port, callback) {
     this.server.listen(port, callback);
   }
-
-  async getGameState(ssId) {
-    const ssElemts = await this.redisClient.sMembers(`session:${ssId}:GS`);
-    const multi = this.redisClient.multi();
-    const GameState = {};
-    ssElemts.forEach((objId) => multi.get(`player:${objId}`));
-    const results = await multi.exec();
-    ssElemts.forEach((objId, index) => {
-      GameState[objId] = JSON.parse(results[index]);
-    });
-    return GameState;
-  }
+  // async getGameState(ssId) {
+  //   const ssElemts = await this.redisClient.hGetAll(`session:${ssId}:players`);
+  //   let GameState = {};
+  //   // for (const [id, value] of Object.values(ssElemts)) {
+  //   //   GameState[id] = JSON.parse(value);
+  //   // }
+  //   for (let [id, obj] of Object.entries(ssElemts)) {
+  //     GameState[id] = obj;
+  //   }
+  //   return GameState;
+  // }
 
   // async getConnections(ssId) {
   //   const ssElemts = await this.redisClient.sMembers(

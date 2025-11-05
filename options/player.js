@@ -46,20 +46,6 @@ class player {
 
     //List of all the element present in a frame
     this.sceneElements = {};
-    // this.redisClient.hSet(
-    //   "sceneElements",
-    //   this.id,
-    //   JSON.stringify({
-    //     id: this.id,
-    //     posX: this.posX,
-    //     posY: this.posY,
-    //     type: this.type,
-    //     lp: this.lp,
-    //     width: this.width,
-    //     heigth: this.heigth,
-    //     playerId: this.id,
-    //   }),
-    // );
 
     //listennes for incoming messages from server and player
     this.updateBattleState();
@@ -208,18 +194,17 @@ class player {
         process.exit();
       } else if (action in actions) {
         let execData = actions[action]();
-        if (action !== "\x1B") {
-          this.client.send(
-            JSON.stringify({
-              messageType: "broadcast",
-              topic: "stateUpdate",
-              sessionId: this.sessionId,
-              senderId: this.id,
-              playerType: this.type,
-              content: this.sceneElements[this.id],
-            }),
-          );
-        }
+        this.client.send(
+          JSON.stringify({
+            messageType: "broadcast",
+            topic: "stateUpdate",
+            sessionId: this.sessionId,
+            senderId: this.id,
+            playerType: this.type,
+            content: this.sceneElements[this.id],
+          }),
+        );
+        displayScene(this.sceneElements);
       }
     });
   }
@@ -234,7 +219,9 @@ class player {
         this.type = msg.content.playerType;
         this.posX = msg.content.initPosX;
         this.posY = msg.content.initPosY;
-        this.sceneElements = msg.content.gameState;
+        for (let [id, obj] of Object.entries(msg.content.gameState)) {
+          this.sceneElements[id] = JSON.parse(obj);
+        }
         // let self = this.sceneElements[this.id];
         // self.posX = this.posX;
         // self.posY = this.posY;
@@ -243,7 +230,7 @@ class player {
         //   console.error("Invalid object received:", msg.content);
         //   return;
         // }
-        this.sceneElements[msg.content.id] = msg.content;
+        this.sceneElements[msg.content.playerId] = msg.content;
       } else if (msg.topic === "shootSomeone") {
       } else if (msg.topic === "endGame") {
         delete this.sceneElements[msg.senderId];
@@ -284,8 +271,9 @@ const id = uuidv4();
 const wsClient = new WebSocket("ws://localhost:3000/newGame", {
   headers: { playerid: id },
 });
-wsClient.on("error", console.error);
 
 wsClient.on("open", () => {
   const player0 = new player(wsClient, id);
 });
+
+wsClient.on("error", console.error);
