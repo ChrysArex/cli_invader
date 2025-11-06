@@ -35,7 +35,6 @@ class GameServer {
       this.connections[playerSession] = [];
       console.log(`new sessions created, sessions id: ${ssId}`);
     }
-    await this.redisClient.sAdd(`session:${playerSession}:GS`, playerId);
     await this.redisClient.sAdd(
       `session:${playerSession}:connections`,
       playerId,
@@ -138,65 +137,8 @@ class GameServer {
           msgObj.content.id
         ] = msgObj.content;
         msgObj.topic = "shootSomeone";
-      } else if (msgObj.topic === "endGame") {
-        //Perform necessary verification to ensure the player has been destroyed
-
-        //First we remove the shoot(or the destroyed element) from the RGS and Connections
-        delete this.sessions[msgObj.sessionId]["referenceGameState"][
-          msgObj.senderId
-        ];
-        delete this.sessions[msgObj.sessionId]["connections"][msgObj.senderId];
-        this.sessions[msgObj.sessionId]["clientCount"] -= 1;
-        if (msgObj.target) {
-          if (
-            msgObj.target.lp === 0 &&
-            this.sessions[msgObj.sessionId]["connections"][
-              msgObj.target.playerId
-            ]
-          ) {
-            const targetConnection =
-              this.sessions[msgObj.sessionId]["connections"][
-                msgObj.target.playerId
-              ];
-            targetConnection.ws.send(
-              JSON.stringify({
-                messageType: "unique",
-                topic: "destroyed",
-                sessionId: msgObj.target.sessionId,
-                senderId: null,
-              }),
-            );
-            targetConnection.ws.close(1000, "you'v been destroyed =)");
-            delete this.sessions[msgObj.sessionId]["connections"][
-              msgObj.target.playerId
-            ];
-            delete this.sessions[msgObj.sessionId]["referenceGameState"][
-              msgObj.target.playerId
-            ];
-            this.sessions[msgObj.sessionId]["clientCount"] -= 1;
-          } else {
-            if (msgObj.target.type === "shoot") {
-              delete this.sessions[msgObj.sessionId]["referenceGameState"][
-                msgObj.target.playerId
-              ];
-            } else {
-              this.sessions[msgObj.sessionId]["referenceGameState"][
-                msgObj.target.playerId
-              ] = msgObj.target;
-              this.sessions[msgObj.sessionId]["connections"][
-                msgObj.target.playerId
-              ].ws.send(
-                JSON.stringify({
-                  messageType: "unique",
-                  topic: "uWereShot",
-                  sessionId: this.ssId,
-                  senderId: null,
-                  content: msgObj.target,
-                }),
-              );
-            }
-          }
-        }
+      } else if (msgObj.topic === "exitGame") {
+        await this.closeConnection(msgObj.sessionId, msgObj.senderId);
       } else if (msgObj.topic === "removeShot") {
         msgObj.content.forEach((shootId) => {
           delete this.sessions[msgObj.sessionId]["referenceGameState"][shootId];
@@ -207,20 +149,23 @@ class GameServer {
       console.log("Message broadcasted");
     });
 
-    ws.on("close", async (ssId) => {
-      // this.connections[ssId];
-      await this.redisClient.hDel(`session:${ssId}:players`, playerId);
-      this.broadcast(
-        JSON.stringify({
-          messageType: "broadcast",
-          topic: "info",
-          sessionId: ssId,
-          senderId: null,
-          content: `Player ${playerId} logged out`,
-        }),
-        this.connections[ssId],
-      );
+    ws.on("close", async (code, ssId) => {});
+  }
+
+  async closeConnection(ssId, playerId) {
+    //Remove player's connection
+    let index;
+    this.connections[ssId].forEach((conn, idx) => {
+      if (conn.playerId === playerId) {
+        conn.ws.close(1000, "Player exit the session");
+        index = idx;
+      }
     });
+    this.connections[ssId].splice(index, 1);
+    console.log(`Player ${playerId} disconnected`);
+    //Remove player's data
+    await this.redisClient.hDel(`session:${ssId}:players`, playerId);
+    await this.redisClient.sRem(`session:${ssId}:connections`, playerId);
   }
 
   broadcast(message, players) {

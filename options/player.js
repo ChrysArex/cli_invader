@@ -222,17 +222,10 @@ class player {
         for (let [id, obj] of Object.entries(msg.content.gameState)) {
           this.sceneElements[id] = JSON.parse(obj);
         }
-        // let self = this.sceneElements[this.id];
-        // self.posX = this.posX;
-        // self.posY = this.posY;
       } else if (msg.topic === "stateUpdate") {
-        // if (!validateGameObject(msg.content)) {
-        //   console.error("Invalid object received:", msg.content);
-        //   return;
-        // }
         this.sceneElements[msg.content.playerId] = msg.content;
       } else if (msg.topic === "shootSomeone") {
-      } else if (msg.topic === "endGame") {
+      } else if (msg.topic === "exitGame") {
         delete this.sceneElements[msg.senderId];
       } else if (msg.topic === "uWereShot") {
         this.lp = msg.content.lp;
@@ -249,7 +242,7 @@ class player {
       this.client.send(
         JSON.stringify({
           messageType: "broadcast",
-          topic: "endGame",
+          topic: "exitGame",
           sessionId: this.sessionId,
           senderId: this.id,
           playerType: this.type,
