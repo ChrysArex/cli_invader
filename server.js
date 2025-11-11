@@ -129,14 +129,6 @@ class GameServer {
       } else if (msgObj.topic === "shootSomeone") {
         //perform a verification of the shoot and a reference update
         //hasCollide(shift, obj1, obj2);
-        delete this.sessions[msgObj.sessionId]["referenceGameState"][
-          "undefined"
-        ];
-        console.log(this.sessions[this.ssId]["referenceGameState"]);
-        this.sessions[msgObj.sessionId]["referenceGameState"][
-          msgObj.content.id
-        ] = msgObj.content;
-        msgObj.topic = "shootSomeone";
       } else if (msgObj.topic === "exitGame") {
         await this.closeConnection(msgObj.sessionId, msgObj.senderId);
       } else if (msgObj.topic === "removeShot") {

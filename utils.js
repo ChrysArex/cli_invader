@@ -18,7 +18,7 @@ export function sleep(ms) {
 }
 
 function getSubFrameRepr(horizontalElmts, posYReference) {
-  let subframe = "\n".repeat(horizontalElmts[0].posY - posYReference);
+  let subframe = "\n".repeat(Math.abs(horizontalElmts[0].posY - posYReference));
   //here we define a fix length for subframe
   let line = " ".repeat(screenXLimit);
   let posXReference = 0;

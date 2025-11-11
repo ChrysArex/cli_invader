@@ -50,7 +50,6 @@ class player {
     //listennes for incoming messages from server and player
     this.updateBattleState();
     this.enableStarshipNavigation();
-    // this.enventLoop();
   }
 
   /*
@@ -62,6 +61,7 @@ class player {
       //escape
       "\x1B": () => {
         this.endBattle();
+        return this.id;
       },
 
       //right move
@@ -76,16 +76,7 @@ class player {
           this.posX += 1;
           this.sceneElements[this.id].posX = this.posX;
         }
-        const self = {
-          id: this.id,
-          posX: this.posX,
-          posY: this.posY,
-          type: this.type,
-          lp: this.lp,
-          width: this.width,
-          heigth: this.heigth,
-        };
-        return self;
+        return this.id;
       },
 
       //left move
@@ -99,16 +90,7 @@ class player {
           this.posX -= 1;
           this.sceneElements[this.id].posX = this.posX;
         }
-        const self = {
-          id: this.id,
-          posX: this.posX,
-          posY: this.posY,
-          type: this.type,
-          lp: this.lp,
-          width: this.width,
-          heigth: this.heigth,
-        };
-        return self;
+        return this.id;
       },
 
       //up move
@@ -122,16 +104,7 @@ class player {
           this.posY -= 1;
           this.sceneElements[this.id].posY = this.posY;
         }
-        const self = {
-          id: this.id,
-          posX: this.posX,
-          posY: this.posY,
-          type: this.type,
-          lp: this.lp,
-          width: this.width,
-          heigth: this.heigth,
-        };
-        return self;
+        return this.id;
       },
 
       //down move
@@ -145,63 +118,45 @@ class player {
           this.posY += 1;
           this.sceneElements[this.id].posY = this.posY;
         }
-        const self = {
-          id: this.id,
-          posX: this.posX,
-          posY: this.posY,
-          type: this.type,
-          lp: this.lp,
-          width: this.width,
-          heigth: this.heigth,
-        };
-        return self;
+
+        return this.id;
       },
 
       //shoot
-      // " ": async () => {
-      //   const shootId = uuidv4();
-      //   let theShoot = {
-      //     type: "shoot",
-      //     direction: this.type === "vessel" ? "ascendant" : "descendant",
-      //     id: shootId,
-      //     posX: this.posX + this.width / 2 + 1,
-      //     posY: this.type === "vessel" ? this.posY - 1 : this.posY + 3,
-      //     width: objectsSize["shoot"][0],
-      //     heigth: objectsSize["shoot"][1] - 1,
-      //     lp: 1,
-      //   };
-      //   this.sceneElements[shootId] = theShoot;
-      //   await this.addToSceneElements(theShoot);
+      " ": () => {
+        let theShoot = {
+          type: "shoot",
+          direction: this.type === "vessel" ? "ascendant" : "descendant",
+          playerId: uuidv4(),
+          posX: this.posX + this.width / 2 + 1,
+          posY: this.type === "vessel" ? this.posY - 1 : this.posY + 3,
+          width: objectsSize["shoot"][0],
+          heigth: objectsSize["shoot"][1] - 1,
+          lp: 1,
+        };
+        this.sceneElements[theShoot.playerId] = theShoot;
 
-      //   await this.redisClient.lPush("shots", shootId);
-      //   this.client.send(
-      //     JSON.stringify({
-      //       messageType: "broadcast",
-      //       topic: "shootSomeone",
-      //       sessionId: this.sessionId,
-      //       senderId: this.id,
-      //       authorId: this.id,
-      //       type: "shoot",
-      //       content: theShoot,
-      //     }),
-      //   );
-      //   return theShoot;
-      // },
+        const intervalID = setInterval(
+          () => this.shootManager(theShoot.playerId, intervalID),
+          100,
+        );
+        return theShoot.playerId;
+      },
     };
     process.stdin.on("data", async (data) => {
       const action = data.toString();
       if (Object.values(this.sceneElements).length === 0) {
         process.exit();
       } else if (action in actions) {
-        let execData = actions[action]();
+        const subjectID = actions[action]();
         this.client.send(
           JSON.stringify({
             messageType: "broadcast",
-            topic: "stateUpdate",
+            topic: action === " " ? "shootSomeone" : "stateUpdate",
             sessionId: this.sessionId,
             senderId: this.id,
-            playerType: this.type,
-            content: this.sceneElements[this.id],
+            playerType: action === " " ? "shoot" : this.type,
+            content: this.sceneElements[subjectID],
           }),
         );
         displayScene(this.sceneElements);
@@ -225,6 +180,11 @@ class player {
       } else if (msg.topic === "stateUpdate") {
         this.sceneElements[msg.content.playerId] = msg.content;
       } else if (msg.topic === "shootSomeone") {
+        this.sceneElements[msg.content.playerId] = msg.content;
+        const intervalID = setInterval(
+          () => this.shootManager(msg.content.playerId, intervalID),
+          100,
+        );
       } else if (msg.topic === "exitGame") {
         delete this.sceneElements[msg.senderId];
       } else if (msg.topic === "uWereShot") {
@@ -236,6 +196,7 @@ class player {
     });
   }
 
+  //Manage player's deconnection
   endBattle() {
     const answer = displayScene(["exit"]);
     if (answer === "y") {
@@ -254,6 +215,29 @@ class player {
       process.stdin.setRawMode(true);
       process.stdin.resume();
     }
+  }
+
+  //Manage shoot creation, evolution and destruction
+  shootManager(shootId, intervalID) {
+    let shoot = this.sceneElements[shootId];
+    if (shoot.posY !== 0 && shoot.posY !== screenYLimit) {
+      const obstacle = Object.values(this.sceneElements).find((obj) => {
+        if (obj.playerId !== shoot.playerId) {
+          return hasCollide(shoot, obj);
+        }
+      });
+      if (!obstacle) {
+        shoot.posY += shoot.direction === "ascendant" ? -1 : 1;
+      } else {
+        obstacle.lp -= 1;
+        clearInterval(intervalID);
+        delete this.sceneElements[shootId];
+      }
+    } else {
+      clearInterval(intervalID);
+      delete this.sceneElements[shootId];
+    }
+    displayScene(this.sceneElements);
   }
 }
 
