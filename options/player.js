@@ -148,15 +148,15 @@ class player {
       if (Object.values(this.sceneElements).length === 0) {
         process.exit();
       } else if (action in actions) {
-        const subjectID = actions[action]();
+        const objectID = actions[action]();
         this.client.send(
           JSON.stringify({
             messageType: "broadcast",
-            topic: action === " " ? "shootSomeone" : "stateUpdate",
+            topic: action === " " ? "shoot" : "stateUpdate",
             sessionId: this.sessionId,
             senderId: this.id,
             playerType: action === " " ? "shoot" : this.type,
-            content: this.sceneElements[subjectID],
+            content: this.sceneElements[objectID],
           }),
         );
         displayScene(this.sceneElements);
@@ -179,14 +179,14 @@ class player {
         }
       } else if (msg.topic === "stateUpdate") {
         this.sceneElements[msg.content.playerId] = msg.content;
-      } else if (msg.topic === "shootSomeone") {
+      } else if (msg.topic === "shoot") {
         this.sceneElements[msg.content.playerId] = msg.content;
         const intervalID = setInterval(
           () => this.shootManager(msg.content.playerId, intervalID),
           100,
         );
-      } else if (msg.topic === "exitGame") {
-        delete this.sceneElements[msg.senderId];
+      } else if (msg.topic === "remove") {
+        msg.content.forEach((id) => delete this.sceneElements[id]);
       } else if (msg.topic === "uWereShot") {
         this.lp = msg.content.lp;
       } else if (msg.topic === "destroyed") {
@@ -203,11 +203,11 @@ class player {
       this.client.send(
         JSON.stringify({
           messageType: "broadcast",
-          topic: "exitGame",
+          topic: "remove",
           sessionId: this.sessionId,
           senderId: this.id,
           playerType: this.type,
-          content: {},
+          content: [this.id],
         }),
       );
       process.exit();

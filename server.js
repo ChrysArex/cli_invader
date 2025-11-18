@@ -3,12 +3,14 @@ import expressWs from "express-ws";
 import { objectsSize } from "./utils.js";
 import { v4 as uuidv4 } from "uuid";
 import { createClient } from "redis";
-//import { hasCollide } from "./collision.js";
+import { hasCollide } from "./collision.js";
+import { screenYLimit } from "./utils.js";
 
 class GameServer {
   constructor(redisClient) {
     //Store the connection objects of the connected clients
     this.connections = {};
+    this.gameState = {};
     this.redisClient = redisClient;
     this.server = express();
     this.typeIdx = -1;
@@ -33,6 +35,7 @@ class GameServer {
       await this.redisClient.set("posXRef", 2);
       playerSession = ssId;
       this.connections[playerSession] = [];
+      this.gameState[playerSession] = {};
       console.log(`new sessions created, sessions id: ${ssId}`);
     }
     await this.redisClient.sAdd(
@@ -66,6 +69,8 @@ class GameServer {
       playerId,
       JSON.stringify(newPlayer),
     );
+
+    this.gameState[playerSession][playerId] = newPlayer;
 
     // Set up and store connection's data
     const newConnection = {
@@ -126,10 +131,23 @@ class GameServer {
           msgObj.content.playerId,
           JSON.stringify(msgObj.content),
         );
-      } else if (msgObj.topic === "shootSomeone") {
+        this.gameState[msgObj.sessionId][msgObj.content.playerId] =
+          msgObj.content;
+      } else if (msgObj.topic === "shoot") {
         //perform a verification of the shoot and a reference update
         //hasCollide(shift, obj1, obj2);
-      } else if (msgObj.topic === "exitGame") {
+        this.gameState[msgObj.sessionId][msgObj.content.playerId] =
+          msgObj.content;
+        const intervalID = setInterval(
+          () =>
+            this.shootManager(
+              msgObj.sessionId,
+              msgObj.content.playerId,
+              intervalID,
+            ),
+          100,
+        );
+      } else if (msgObj.topic === "remove") {
         await this.closeConnection(msgObj.sessionId, msgObj.senderId);
       } else if (msgObj.topic === "removeShot") {
         msgObj.content.forEach((shootId) => {
@@ -140,8 +158,6 @@ class GameServer {
       this.broadcast(msg, this.connections[msgObj.sessionId]);
       console.log("Message broadcasted");
     });
-
-    ws.on("close", async (code, ssId) => {});
   }
 
   async closeConnection(ssId, playerId) {
@@ -154,10 +170,64 @@ class GameServer {
       }
     });
     this.connections[ssId].splice(index, 1);
+    delete this.gameState[ssId][playerId];
     console.log(`Player ${playerId} disconnected`);
     //Remove player's data
     await this.redisClient.hDel(`session:${ssId}:players`, playerId);
     await this.redisClient.sRem(`session:${ssId}:connections`, playerId);
+  }
+
+  //Manage shoot creation, evolution and destruction
+  async shootManager(ssId, shootId, intervalID) {
+    let shoot = this.gameState[ssId][shootId];
+    if (shoot.posY !== 0 && shoot.posY !== screenYLimit) {
+      const obstacle = Object.values(this.gameState[ssId]).find((obj) => {
+        if (obj.playerId !== shoot.playerId) {
+          return hasCollide(shoot, obj);
+        }
+      });
+      if (!obstacle) {
+        shoot.posY += shoot.direction === "ascendant" ? -1 : 1;
+      } else {
+        obstacle.lp -= 1;
+        console.log(`here is the touched obj ${JSON.stringify(obstacle)}`);
+        let objToRemove = [];
+        if (obstacle.lp === 0) {
+          console.log(`here is the destroyed obj ${JSON.stringify(obstacle)}`);
+          objToRemove.push(obstacle.playerId);
+          delete this.gameState[ssId][obstacle.playerId];
+          if (obstacle.type !== "shoot")
+            this.closeConnection(ssId, obstacle.playerId);
+        } else {
+          this.broadcast(
+            JSON.stringify({
+              messageType: "broadcast",
+              topic: "stateUpdate",
+              sessionId: ssId,
+              senderId: null,
+              content: obstacle,
+            }),
+            this.connections[ssId],
+          );
+        }
+        objToRemove.push(shoot.playerId);
+        delete this.gameState[ssId][shoot.playerId];
+        this.broadcast(
+          JSON.stringify({
+            messageType: "broadcast",
+            topic: "remove",
+            sessionId: ssId,
+            senderId: null,
+            content: objToRemove,
+          }),
+          this.connections[ssId],
+        );
+        clearInterval(intervalID);
+        console.log("Message broadcasted");
+      }
+    } else {
+      clearInterval(intervalID);
+    }
   }
 
   broadcast(message, players) {
@@ -182,31 +252,6 @@ class GameServer {
   listen(port, callback) {
     this.server.listen(port, callback);
   }
-  // async getGameState(ssId) {
-  //   const ssElemts = await this.redisClient.hGetAll(`session:${ssId}:players`);
-  //   let GameState = {};
-  //   // for (const [id, value] of Object.values(ssElemts)) {
-  //   //   GameState[id] = JSON.parse(value);
-  //   // }
-  //   for (let [id, obj] of Object.entries(ssElemts)) {
-  //     GameState[id] = obj;
-  //   }
-  //   return GameState;
-  // }
-
-  // async getConnections(ssId) {
-  //   const ssElemts = await this.redisClient.sMembers(
-  //     `session:${ssId}:connections`,
-  //   );
-  //   const multi = this.redisClient.multi();
-  //   const connections = [];
-  //   ssElemts.forEach((playerId) => multi.get(`connection:${playerId}`));
-  //   const results = await multi.exec();
-  //   results.map(([error, data]) => {
-  //     connections[data.playerId] = JSON.parse(data);
-  //   });
-  //   return connections;
-  // }
 }
 
 //Server's redis connection
