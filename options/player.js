@@ -220,22 +220,15 @@ class player {
   //Manage shoot creation, evolution and destruction
   shootManager(shootId, intervalID) {
     let shoot = this.sceneElements[shootId];
-    if (shoot.posY !== 0 && shoot.posY !== screenYLimit) {
-      const obstacle = Object.values(this.sceneElements).find((obj) => {
-        if (obj.playerId !== shoot.playerId) {
-          return hasCollide(shoot, obj);
-        }
-      });
-      if (!obstacle) {
-        shoot.posY += shoot.direction === "ascendant" ? -1 : 1;
-      } else {
-        obstacle.lp -= 1;
-        clearInterval(intervalID);
-        delete this.sceneElements[shootId];
-      }
+    if (
+      shoot !== undefined &&
+      shoot.posY !== 0 &&
+      shoot.posY !== screenYLimit
+    ) {
+      shoot.posY += shoot.direction === "ascendant" ? -1 : 1;
     } else {
-      clearInterval(intervalID);
       delete this.sceneElements[shootId];
+      clearInterval(intervalID);
     }
     displayScene(this.sceneElements);
   }

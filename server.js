@@ -193,12 +193,16 @@ class GameServer {
         console.log(`here is the touched obj ${JSON.stringify(obstacle)}`);
         let objToRemove = [];
         if (obstacle.lp === 0) {
-          console.log(`here is the destroyed obj ${JSON.stringify(obstacle)}`);
           objToRemove.push(obstacle.playerId);
           delete this.gameState[ssId][obstacle.playerId];
           if (obstacle.type !== "shoot")
             this.closeConnection(ssId, obstacle.playerId);
         } else {
+          await this.redisClient.hSet(
+            `session:${ssId}:players`,
+            obstacle.playerId,
+            JSON.stringify(obstacle),
+          );
           this.broadcast(
             JSON.stringify({
               messageType: "broadcast",
