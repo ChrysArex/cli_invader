@@ -1,4 +1,4 @@
-import { hasCollide } from "./collision.js";
+//import { hasCollide } from "./collision.js";
 import { question } from "readline-sync";
 import figlet from "figlet";
 
@@ -60,7 +60,7 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
 }
 
 // This function is responsible to render a consistent representation of the game state across all players (Frame)
-export function displayScene(GS) {
+export function displayScene(GS, notif) {
   let gameState = Object.values(GS).slice();
   if (gameState.length === 1 && gameState[0] === "exit") {
     console.clear();
@@ -125,8 +125,11 @@ export function displayScene(GS) {
     finalFrame += getSubFrameRepr(verticallySortedElmt, posYReference);
     posYReference = verticallySortedElmt[0].posY;
   });
+  //Add eventual remaining space to fix the height of the main frame
+  finalFrame += "\n".repeat(screenYLimit - posYReference);
   console.clear();
   console.log(finalFrame);
+  console.log(notif);
 }
 
 // displayScene([

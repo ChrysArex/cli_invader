@@ -35,7 +35,7 @@ class GameServer {
       await this.redisClient.set("posXRef", 2);
       playerSession = ssId;
       this.connections[playerSession] = [];
-      this.gameState[playerSession] = {};
+      this.gameState[playerSession] = { stage: "WAITING" };
       console.log(`new sessions created, sessions id: ${ssId}`);
     }
     await this.redisClient.sAdd(
@@ -45,7 +45,10 @@ class GameServer {
     const conCount = await this.redisClient.sCard(
       `session:${playerSession}:connections`,
     );
-    if (conCount === 6) await this.redisClient.del("availableSession");
+    if (conCount === 6) {
+      this.gameState[playerSession]["stage"] = "BATTLE";
+      await this.redisClient.del("availableSession");
+    }
 
     //Increment and get the swich variable
     await this.redisClient.incr("swich");
@@ -99,6 +102,7 @@ class GameServer {
         topic: "init",
         sessionId: playerSession,
         senderId: null,
+        notif: `Welcome in the team`,
         content: {
           ssId: playerSession,
           playerType: newPlayer.type,
@@ -115,6 +119,7 @@ class GameServer {
         topic: "stateUpdate",
         sessionId: playerSession,
         senderId: playerId,
+        notif: `${6 - conCount} player(s) more and we are good to go `,
         content: newPlayer,
       }),
       this.connections[playerSession],
@@ -135,18 +140,19 @@ class GameServer {
           msgObj.content;
       } else if (msgObj.topic === "shoot") {
         //perform a verification of the shoot and a reference update
-        //hasCollide(shift, obj1, obj2);
-        this.gameState[msgObj.sessionId][msgObj.content.playerId] =
-          msgObj.content;
-        const intervalID = setInterval(
-          () =>
-            this.shootManager(
-              msgObj.sessionId,
-              msgObj.content.playerId,
-              intervalID,
-            ),
-          100,
-        );
+        if (this.gameState[msgObj.sessionId]["stage"] !== "WAITING") {
+          this.gameState[msgObj.sessionId][msgObj.content.playerId] =
+            msgObj.content;
+          const intervalID = setInterval(
+            () =>
+              this.shootManager(
+                msgObj.sessionId,
+                msgObj.content.playerId,
+                intervalID,
+              ),
+            100,
+          );
+        }
       } else if (msgObj.topic === "remove") {
         await this.closeConnection(msgObj.sessionId, msgObj.senderId);
       } else if (msgObj.topic === "removeShot") {
@@ -190,7 +196,7 @@ class GameServer {
         shoot.posY += shoot.direction === "ascendant" ? -1 : 1;
       } else {
         obstacle.lp -= 1;
-        console.log(`here is the touched obj ${JSON.stringify(obstacle)}`);
+        console.log(`${obstacle.playerId} is touched`);
         let objToRemove = [];
         if (obstacle.lp === 0) {
           objToRemove.push(obstacle.playerId);

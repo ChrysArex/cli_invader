@@ -192,7 +192,7 @@ class player {
       } else if (msg.topic === "destroyed") {
         this.sceneElements = ["destroyed"];
       }
-      displayScene(this.sceneElements);
+      displayScene(this.sceneElements, msg.notif);
     });
   }
 
