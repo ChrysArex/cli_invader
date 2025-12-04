@@ -45,10 +45,6 @@ class GameServer {
     const conCount = await this.redisClient.sCard(
       `session:${playerSession}:connections`,
     );
-    if (conCount === 6) {
-      this.gameState[playerSession]["stage"] = "BATTLE";
-      await this.redisClient.del("availableSession");
-    }
 
     //Increment and get the swich variable
     await this.redisClient.incr("swich");
@@ -102,7 +98,7 @@ class GameServer {
         topic: "init",
         sessionId: playerSession,
         senderId: null,
-        notif: `Welcome in the team`,
+        notif: `Welcome in the battle`,
         content: {
           ssId: playerSession,
           playerType: newPlayer.type,
@@ -124,8 +120,24 @@ class GameServer {
       }),
       this.connections[playerSession],
     );
+    //We swich mode if the rigth number of connection is hit
+    if (conCount === 6) {
+      this.gameState[playerSession]["stage"] = "BATTLE";
+      await this.redisClient.del("availableSession");
+      this.broadcast(
+        JSON.stringify({
+          messageType: "broadcast",
+          topic: "start",
+          sessionId: playerSession,
+          senderId: null,
+          notif: `Get ready to fight`,
+        }),
+        this.connections[playerSession],
+      );
+    }
   }
 
+  //Set up a set of condition to enable players to communicate with the server
   setUpListeners(ws, playerId) {
     ws.on("message", async (msg) => {
       const msgObj = JSON.parse(msg);
@@ -166,6 +178,7 @@ class GameServer {
     });
   }
 
+  //Manage player deconnection
   async closeConnection(ssId, playerId) {
     //Remove player's connection
     let index;

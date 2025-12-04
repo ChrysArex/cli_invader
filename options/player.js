@@ -11,6 +11,7 @@ import {
   validateGameObject,
   removeFromSceneElements,
   sleep,
+  countDown,
 } from "../utils.js";
 import { console } from "node:inspector/promises";
 import { createClient } from "redis";
@@ -179,6 +180,13 @@ class player {
         }
       } else if (msg.topic === "stateUpdate") {
         this.sceneElements[msg.content.playerId] = msg.content;
+      } else if (msg.topic === "start") {
+        for (let countDownNumber = 10; countDownNumber > 0; countDownNumber--) {
+          countDown(countDownNumber);
+          await sleep(1000);
+        }
+        countDown("GO");
+        await sleep(1000);
       } else if (msg.topic === "shoot") {
         this.sceneElements[msg.content.playerId] = msg.content;
         const intervalID = setInterval(

@@ -60,7 +60,7 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
 }
 
 // This function is responsible to render a consistent representation of the game state across all players (Frame)
-export function displayScene(GS, notif) {
+export function displayScene(GS, notif = "") {
   let gameState = Object.values(GS).slice();
   if (gameState.length === 1 && gameState[0] === "exit") {
     console.clear();
@@ -125,11 +125,30 @@ export function displayScene(GS, notif) {
     finalFrame += getSubFrameRepr(verticallySortedElmt, posYReference);
     posYReference = verticallySortedElmt[0].posY;
   });
-  //Add eventual remaining space to fix the height of the main frame
+  //Add eventual space to fix the height of the main frame
   finalFrame += "\n".repeat(screenYLimit - posYReference);
   console.clear();
   console.log(finalFrame);
   console.log(notif);
+}
+
+export function countDown(num) {
+  let cdFrame = "\n".repeat(screenYLimit / 2);
+  cdFrame += " ".repeat(screenXLimit / 2);
+  let number = figlet.textSync(num, {
+    font: "Graffiti",
+    horizontalLayout: "default",
+    verticalLayout: "default",
+    width: 100,
+    heigth: 100,
+    whitespaceBreak: true,
+  });
+  for (let i = 0; i < number.length; i++) {
+    cdFrame += number[i];
+    if (number[i] === "\n") cdFrame += " ".repeat(screenXLimit / 2);
+  }
+  console.clear();
+  console.log(cdFrame);
 }
 
 // displayScene([
