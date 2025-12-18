@@ -32,6 +32,8 @@ class GameServer {
       const ssId = uuidv4();
       await this.redisClient.set("availableSession", ssId);
       await this.redisClient.set("swich", 0);
+      await this.redisClient.set(`session:${ssId}:vessel`, 0);
+      await this.redisClient.set(`session:${ssId}:opponent`, 0);
       await this.redisClient.set("posXRef", 2);
       playerSession = ssId;
       this.connections[playerSession] = [];
@@ -50,6 +52,11 @@ class GameServer {
     await this.redisClient.incr("swich");
     const swich = await this.redisClient.get("swich");
     const posXRef = parseInt(await this.redisClient.get("posXRef"));
+
+    //Keep track of the number of player in each team
+    swich % 2 === 0
+      ? await this.redisClient.incr(`session:${playerSession}:opponent`)
+      : await this.redisClient.incr(`session:${playerSession}:vessel`);
 
     // Set up user's data and Store it
     const newPlayer = {
@@ -152,21 +159,26 @@ class GameServer {
           msgObj.content;
       } else if (msgObj.topic === "shoot") {
         //perform a verification of the shoot and a reference update
-        if (this.gameState[msgObj.sessionId]["stage"] !== "WAITING") {
-          this.gameState[msgObj.sessionId][msgObj.content.playerId] =
-            msgObj.content;
-          const intervalID = setInterval(
-            () =>
-              this.shootManager(
-                msgObj.sessionId,
-                msgObj.content.playerId,
-                intervalID,
-              ),
-            100,
-          );
-        }
+        this.gameState[msgObj.sessionId][msgObj.content.playerId] =
+          msgObj.content;
+        const intervalID = setInterval(
+          () =>
+            this.shootManager(
+              msgObj.sessionId,
+              msgObj.content.playerId,
+              intervalID,
+            ),
+          100,
+        );
+        // if (this.gameState[msgObj.sessionId]["stage"] !== "WAITING") {
+
+        // }
       } else if (msgObj.topic === "remove") {
-        await this.closeConnection(msgObj.sessionId, msgObj.senderId);
+        await this.closeConnection(
+          msgObj.sessionId,
+          msgObj.senderId,
+          msgObj.playerType,
+        );
       } else if (msgObj.topic === "removeShot") {
         msgObj.content.forEach((shootId) => {
           delete this.sessions[msgObj.sessionId]["referenceGameState"][shootId];
@@ -179,43 +191,77 @@ class GameServer {
   }
 
   //Manage player deconnection
-  async closeConnection(ssId, playerId) {
+  async closeConnection(ssId, playerId, playerType) {
     //Remove player's connection
-    let index;
+    let index, oppCount, vessCount;
     this.connections[ssId].forEach((conn, idx) => {
       if (conn.playerId === playerId) {
         conn.ws.close(1000, "Player exit the session");
         index = idx;
       }
     });
+    //Remove player's data in redis
+    if (playerType === "opponent") {
+      await this.redisClient.decr(`session:${ssId}:opponent`);
+      oppCount = await this.redisClient.get(`session:${ssId}:opponent`);
+    } else {
+      await this.redisClient.decr(`session:${ssId}:vessel`);
+      vessCount = await this.redisClient.get(`session:${ssId}:vessel`);
+    }
+    await this.redisClient.hDel(`session:${ssId}:players`, playerId);
+    await this.redisClient.sRem(`session:${ssId}:connections`, playerId);
+    //Remove player's data in server
     this.connections[ssId].splice(index, 1);
     delete this.gameState[ssId][playerId];
     console.log(`Player ${playerId} disconnected`);
-    //Remove player's data
-    await this.redisClient.hDel(`session:${ssId}:players`, playerId);
-    await this.redisClient.sRem(`session:${ssId}:connections`, playerId);
+    //
+    if (vessCount === 0 || oppCount === 2) {
+      this.broadcast(
+        JSON.stringify({
+          messageType: "team",
+          topic: "winner",
+          playerType: oppCount === 0 ? "vessel" : "opponent",
+          sessionId: ssId,
+          senderId: null,
+          notif: `You won`,
+        }),
+        this.connections[playerSession],
+      );
+
+      this.broadcast(
+        JSON.stringify({
+          messageType: "team",
+          topic: "looser",
+          playerType: oppCount === 0 ? "opponent" : "vessel",
+          sessionId: ssId,
+          senderId: null,
+          notif: `You lost`,
+        }),
+        this.connections[playerSession],
+      );
+    }
   }
 
   //Manage shoot creation, evolution and destruction
   async shootManager(ssId, shootId, intervalID) {
     let shoot = this.gameState[ssId][shootId];
-    if (shoot.posY !== 0 && shoot.posY !== screenYLimit) {
+    if (shoot && shoot.posY !== 0 && shoot.posY !== screenYLimit) {
       const obstacle = Object.values(this.gameState[ssId]).find((obj) => {
-        if (obj.playerId !== shoot.playerId) {
-          return hasCollide(shoot, obj);
+        if (obj.playerId && obj.playerId !== shoot.playerId) {
+          return hasCollide({ ...shoot, type: "shoot" }, obj);
         }
       });
       if (!obstacle) {
         shoot.posY += shoot.direction === "ascendant" ? -1 : 1;
       } else {
         obstacle.lp -= 1;
-        console.log(`${obstacle.playerId} is touched`);
+        console.log(`${obstacle.type} is touched`);
         let objToRemove = [];
         if (obstacle.lp === 0) {
           objToRemove.push(obstacle.playerId);
           delete this.gameState[ssId][obstacle.playerId];
           if (obstacle.type !== "shoot")
-            this.closeConnection(ssId, obstacle.playerId);
+            this.closeConnection(ssId, obstacle.playerId, obstacle.type);
         } else {
           await this.redisClient.hSet(
             `session:${ssId}:players`,
@@ -257,18 +303,19 @@ class GameServer {
     const msgObj = JSON.parse(message);
     if (msgObj.messageType === "broadcast") {
       players.forEach((player) => {
+        if (player["playerId"] !== msgObj.senderId) player.ws.send(message);
+      });
+      return;
+    }
+    if (msgObj.messageType === "team") {
+      players.forEach((player) => {
         if (
-          msgObj.messageType === "broadcast" &&
-          player["playerId"] !== msgObj.senderId
-        )
-          player.ws.send(message);
-        else if (
           player["playerId"] !== msgObj.senderId &&
           player.playerType === msgObj.playerType
-        ) {
+        )
           player.ws.send(message);
-        }
       });
+      return;
     }
   }
 

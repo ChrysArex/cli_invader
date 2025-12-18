@@ -48,6 +48,9 @@ class player {
     //List of all the element present in a frame
     this.sceneElements = {};
 
+    //Player's stats during the session
+    let stats = { kills: 0, shots: 0, dammages: 0 };
+
     //listennes for incoming messages from server and player
     this.updateBattleState();
     this.enableStarshipNavigation();
@@ -129,7 +132,7 @@ class player {
           type: "shoot",
           direction: this.type === "vessel" ? "ascendant" : "descendant",
           playerId: uuidv4(),
-          posX: this.posX + this.width / 2 + 1,
+          posX: this.posX + this.width / 2,
           posY: this.type === "vessel" ? this.posY - 1 : this.posY + 3,
           width: objectsSize["shoot"][0],
           heigth: objectsSize["shoot"][1] - 1,
@@ -197,8 +200,8 @@ class player {
         msg.content.forEach((id) => delete this.sceneElements[id]);
       } else if (msg.topic === "uWereShot") {
         this.lp = msg.content.lp;
-      } else if (msg.topic === "destroyed") {
-        this.sceneElements = ["destroyed"];
+      } else if (msg.topic === "winner" || msg.topic === "looser") {
+        this.sceneElements = ["end"];
       }
       displayScene(this.sceneElements, msg.notif);
     });

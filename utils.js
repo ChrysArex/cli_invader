@@ -8,9 +8,9 @@ export const screenYLimit = 25;
 //these sizes refer to how much unit I have to add to the X or Y component to get the end coordinates
 export const objectsSize = {
   //object: [width, height]
-  vessel: [13, 2],
-  opponent: [11, 3],
-  shoot: [0, 1],
+  vessel: [12, 2],
+  opponent: [10, 3],
+  shoot: [1, 1],
 };
 
 export function sleep(ms) {
@@ -35,7 +35,7 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
     }
 
     const GLYPH = {
-      vessel: [`${lifePointRepr}____/\\____`, `  /||||  ||||\\`],
+      vessel: [` _____/\\____${lifePointRepr}`, ` /||||  ||||\\`],
       opponent: [`\\\\dest_234//`, `***** ****${lifePointRepr}`, `\\/`],
       shoot: `||`,
     };
@@ -59,18 +59,18 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
   return subframe;
 }
 
-// This function is responsible to render a consistent representation of the game state across all players (Frame)
+//This function is responsible to render a consistent representation of the game state across all players (Frame)
 export function displayScene(GS, notif = "") {
   let gameState = Object.values(GS).slice();
   if (gameState.length === 1 && gameState[0] === "exit") {
     console.clear();
     const answer = question("Do you really want to leave the party ? (y/n)");
     return answer;
-  } else if (gameState.length === 1 && gameState[0] === "destroyed") {
+  } else if (gameState.length === 1 && gameState[0] === "end") {
     console.clear();
     const d = "test";
-    const stats = `You have been killed by: ${d} \nkills: ${d} \nshots: ${d} \ndammages: ${d} \n`;
-    const endGame = figlet.textSync("Game Over", {
+    const stats = `Session stats:\nkills: ${d} \nshots: ${d} \ndammages: ${d} \n`;
+    const endGame = figlet.textSync(gameState[0], {
       font: "Graffiti",
       horizontalLayout: "default",
       verticalLayout: "default",
@@ -126,7 +126,7 @@ export function displayScene(GS, notif = "") {
     posYReference = verticallySortedElmt[0].posY;
   });
   //Add eventual space to fix the height of the main frame
-  finalFrame += "\n".repeat(screenYLimit - posYReference);
+  finalFrame += "\n".repeat(Math.abs(screenYLimit - posYReference));
   console.clear();
   console.log(finalFrame);
   console.log(notif);
