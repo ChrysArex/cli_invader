@@ -59,6 +59,25 @@ function getSubFrameRepr(horizontalElmts, posYReference) {
   return subframe;
 }
 
+export function countDown(num) {
+  let cdFrame = "\n".repeat(screenYLimit / 2);
+  cdFrame += " ".repeat(screenXLimit / 2);
+  let number = figlet.textSync(num, {
+    font: "Graffiti",
+    horizontalLayout: "default",
+    verticalLayout: "default",
+    width: 100,
+    heigth: 100,
+    whitespaceBreak: true,
+  });
+  for (let i = 0; i < number.length; i++) {
+    cdFrame += number[i];
+    if (number[i] === "\n") cdFrame += " ".repeat(screenXLimit / 2);
+  }
+  console.clear();
+  console.log(cdFrame);
+}
+
 //This function is responsible to render a consistent representation of the game state across all players (Frame)
 export function displayScene(GS, notif = "") {
   let gameState = Object.values(GS).slice();
@@ -66,10 +85,11 @@ export function displayScene(GS, notif = "") {
     console.clear();
     const answer = question("Do you really want to leave the party ? (y/n)");
     return answer;
-  } else if (gameState.length === 1 && gameState[0] === "end") {
+  } else if (gameState[0] === "winner" || gameState[0] === "looser") {
     console.clear();
-    const d = "test";
-    const stats = `Session stats:\nkills: ${d} \nshots: ${d} \ndammages: ${d} \n`;
+    const data = gameState[1];
+    const stats = `Session stats:\nkills: ${data["kills"]} \nshots: ${data["shots"]} \ndammages: ${data["dammages"]} \n`;
+
     const endGame = figlet.textSync(gameState[0], {
       font: "Graffiti",
       horizontalLayout: "default",
@@ -80,7 +100,7 @@ export function displayScene(GS, notif = "") {
     console.log(endGame);
     console.log(stats);
     console.log("Press any key to exit");
-    return;
+    process.exit();
   }
 
   let sceneElements = gameState;
@@ -130,25 +150,6 @@ export function displayScene(GS, notif = "") {
   console.clear();
   console.log(finalFrame);
   console.log(notif);
-}
-
-export function countDown(num) {
-  let cdFrame = "\n".repeat(screenYLimit / 2);
-  cdFrame += " ".repeat(screenXLimit / 2);
-  let number = figlet.textSync(num, {
-    font: "Graffiti",
-    horizontalLayout: "default",
-    verticalLayout: "default",
-    width: 100,
-    heigth: 100,
-    whitespaceBreak: true,
-  });
-  for (let i = 0; i < number.length; i++) {
-    cdFrame += number[i];
-    if (number[i] === "\n") cdFrame += " ".repeat(screenXLimit / 2);
-  }
-  console.clear();
-  console.log(cdFrame);
 }
 
 // displayScene([

@@ -49,7 +49,7 @@ class player {
     this.sceneElements = {};
 
     //Player's stats during the session
-    let stats = { kills: 0, shots: 0, dammages: 0 };
+    this.stats = { kills: 0, shots: 0, dammages: 0 };
 
     //listennes for incoming messages from server and player
     this.updateBattleState();
@@ -132,6 +132,7 @@ class player {
           type: "shoot",
           direction: this.type === "vessel" ? "ascendant" : "descendant",
           playerId: uuidv4(),
+          authorId: this.id,
           posX: this.posX + this.width / 2,
           posY: this.type === "vessel" ? this.posY - 1 : this.posY + 3,
           width: objectsSize["shoot"][0],
@@ -144,6 +145,7 @@ class player {
           () => this.shootManager(theShoot.playerId, intervalID),
           100,
         );
+        this.stats["shots"]++;
         return theShoot.playerId;
       },
     };
@@ -196,12 +198,12 @@ class player {
           () => this.shootManager(msg.content.playerId, intervalID),
           100,
         );
+      } else if (msg.topic === "stats") {
+        this.stats[msg.content]++;
       } else if (msg.topic === "remove") {
         msg.content.forEach((id) => delete this.sceneElements[id]);
-      } else if (msg.topic === "uWereShot") {
-        this.lp = msg.content.lp;
       } else if (msg.topic === "winner" || msg.topic === "looser") {
-        this.sceneElements = ["end"];
+        this.sceneElements = [msg.topic, this.stats];
       }
       displayScene(this.sceneElements, msg.notif);
     });
