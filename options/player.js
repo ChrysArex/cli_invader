@@ -51,9 +51,39 @@ class player {
     //Player's stats during the session
     this.stats = { kills: 0, shots: 0, dammages: 0 };
 
+    this.refTime = 0;
+    this.refAction = "";
+    this.refActionID = 0;
+
     //listennes for incoming messages from server and player
     this.updateBattleState();
     this.enableStarshipNavigation();
+  }
+
+  doubleTapHandler(action, time) {
+    if (
+      time - this.refTime > 100 &&
+      time - this.refTime <= 200 &&
+      action === this.refAction
+    ) {
+      clearInterval(this.refActionID);
+      this.refActionID = setInterval(() => {
+        const objectID = action();
+        this.client.send(
+          JSON.stringify({
+            messageType: "broadcast",
+            topic: action === " " ? "shoot" : "stateUpdate",
+            sessionId: this.sessionId,
+            senderId: this.id,
+            playerType: action === " " ? "shoot" : this.type,
+            content: this.sceneElements[objectID],
+          }),
+        );
+        displayScene(this.sceneElements);
+      }, 40);
+    } else clearInterval(this.refActionID);
+    this.refAction = action;
+    this.refTime = time;
   }
 
   /*
@@ -154,6 +184,7 @@ class player {
       if (Object.values(this.sceneElements).length === 0) {
         process.exit();
       } else if (action in actions) {
+        if (action !== " ") this.doubleTapHandler(actions[action], Date.now());
         const objectID = actions[action]();
         this.client.send(
           JSON.stringify({
